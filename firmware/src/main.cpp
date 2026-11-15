@@ -13,7 +13,7 @@
 
 namespace {
 
-constexpr uint8_t kBuzzerPin = 25;  // アクティブブザーの I/O（配線に合わせて変える）
+constexpr uint8_t kBuzzerPin = 18;  // アクティブブザーの I/O（配線に合わせて変える）
 constexpr uint8_t kLedPin = 2;      // 基板上の LED
 constexpr uint8_t kMpuAddress = 0x68;
 constexpr uint32_t kSamplePeriodMs = 10;  // 100Hz
