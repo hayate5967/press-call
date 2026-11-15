@@ -13,16 +13,22 @@
 
 namespace {
 
-constexpr uint8_t kBuzzerPin = 18;  // アクティブブザーの I/O（配線に合わせて変える）
-constexpr uint8_t kLedPin = 2;      // 基板上の LED
+constexpr uint8_t kBuzzerPin = 18;       // アクティブブザーの I/O
+constexpr bool kBuzzerActiveLow = true;  // 「低电平触发」のモジュールは LOW で鳴る
+constexpr uint8_t kLedPin = 2;           // 基板上の LED
 constexpr uint8_t kMpuAddress = 0x68;
 constexpr uint32_t kSamplePeriodMs = 10;  // 100Hz
 
+void buzzer(bool on) {
+    // LOW で鳴るモジュールなら、鳴らすときに LOW を出す
+    digitalWrite(kBuzzerPin, (on != kBuzzerActiveLow) ? HIGH : LOW);
+}
+
 void beep(uint32_t ms) {
-    digitalWrite(kBuzzerPin, HIGH);
+    buzzer(true);
     digitalWrite(kLedPin, HIGH);
     delay(ms);
-    digitalWrite(kBuzzerPin, LOW);
+    buzzer(false);
     digitalWrite(kLedPin, LOW);
 }
 
@@ -70,6 +76,7 @@ uint32_t lastSampleMs = 0;
 }  // namespace
 
 void setup() {
+    buzzer(false);  // 先に「止める」値を出してから出力にする（起動直後に鳴るのを防ぐ）
     pinMode(kBuzzerPin, OUTPUT);
     pinMode(kLedPin, OUTPUT);
     Serial.begin(115200);
