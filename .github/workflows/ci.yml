@@ -1,0 +1,73 @@
+# CI：すべての push と PR で lint・型チェック・テスト・ビルドを回す（NFR-13）
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typescript:
+    name: API・Web・shared
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: 依存関係のインストール
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint と整形のチェック（Biome）
+        run: pnpm lint
+
+      - name: 型チェック
+        run: pnpm typecheck
+
+      - name: テスト
+        run: pnpm test
+
+      - name: Web アプリのビルド
+        run: pnpm --filter @press-call/web build
+
+      - name: Worker のバンドル確認（デプロイはしない）
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy --dry-run --outdir dist
+
+  firmware:
+    name: ファームウェア
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: PlatformIO のインストール
+        run: pip install platformio
+
+      - name: 判定ロジックのテスト（PC 上）
+        run: pio test -e native
+
+      - name: ESP32 向けのビルド
+        run: pio run -e esp32dev

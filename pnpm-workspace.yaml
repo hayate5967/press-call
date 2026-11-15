@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# インストール時にスクリプトの実行を許可するパッケージ（wrangler と vite が使う）
+onlyBuiltDependencies:
+  - esbuild
+  - workerd

@@ -1,0 +1,12 @@
+# このファイルを .dev.vars にコピーして値を入れる（.dev.vars は Git に入れない）
+# 本番では wrangler secret put <名前> で登録する
+
+# Google OAuth（Google Cloud Console で発行）
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# JWT 署名用の ES256 秘密鍵（JWK 形式の JSON を 1 行で）
+JWT_PRIVATE_JWK=
+
+# 手元の開発で使う Neon の開発用ブランチの接続文字列
+DATABASE_URL=

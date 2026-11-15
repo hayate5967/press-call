@@ -1,0 +1,19 @@
+// Cloudflare Workers の設定。API と Web アプリを 1 つの Worker から配信する（ADR-007）
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "press-call",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    // Web アプリ（Vite）のビルド結果。/api/* 以外はここから返す
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "enabled": true
+  }
+  // DB を使い始めたら Hyperdrive の設定を追加する：
+  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<wrangler hyperdrive create で発行された ID>" }]
+}
