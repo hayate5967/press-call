@@ -13,15 +13,17 @@ type Problem = { type: string; status: number; code: string; errors?: { path: st
 let db: Db;
 let close: () => Promise<void>;
 let app: ReturnType<typeof createTestApp>;
-let env: { ENVIRONMENT: "development"; DEV_DEVICE_ID: string };
+let deviceId: string;
+let auth: { Authorization: string };
 
 beforeAll(async () => {
   const t = await createTestDb();
   db = t.db;
   close = () => t.client.close();
   app = createTestApp(db);
-  const { deviceId } = await seedDevice(db);
-  env = { ENVIRONMENT: "development", DEV_DEVICE_ID: deviceId };
+  const seeded = await seedDevice(db);
+  deviceId = seeded.deviceId;
+  auth = { Authorization: `Bearer ${seeded.token}` };
 });
 
 afterAll(async () => {
@@ -59,16 +61,12 @@ function makeSet(overrides: Partial<CreateSetInput> = {}): CreateSetInput {
   };
 }
 
-function post(body: unknown, e: Record<string, unknown> = env) {
-  return app.request(
-    "/api/v1/device/sets",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: typeof body === "string" ? body : JSON.stringify(body),
-    },
-    e,
-  );
+function post(body: unknown) {
+  return app.request("/api/v1/device/sets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...auth },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
 }
 
 async function countRows() {
@@ -89,7 +87,7 @@ describe("POST /api/v1/device/sets：正常系", () => {
     const [row] = await db.select().from(sets).where(eq(sets.id, body.setId));
     expect(row).toMatchObject({
       sessionId: body.sessionId,
-      deviceId: env.DEV_DEVICE_ID,
+      deviceId,
       clientSetId: input.clientSetId,
       mode: "auto_signal",
       pauseMode: "random",
@@ -287,39 +285,6 @@ describe("POST /api/v1/device/sets：不正な入力", () => {
     const huge = { ...input, padding: "x".repeat(65 * 1024) };
     await expectProblem(await post(huge), 413, "payload_too_large");
   });
-
-  it("仮のデバイスが設定されていないと 401 device_token_invalid", async () => {
-    await expectProblem(
-      await post(makeSet(), { ENVIRONMENT: "development" }),
-      401,
-      "device_token_invalid",
-    );
-  });
-
-  it("本番（ENVIRONMENT=production）では DEV_DEVICE_ID があっても 401 で、何も保存しない", async () => {
-    await expectProblem(
-      await post(makeSet(), { ...env, ENVIRONMENT: "production" }),
-      401,
-      "device_token_invalid",
-    );
-    expect(await countRows()).toEqual({ sets: 0, reps: 0, sessions: 0 });
-  });
-
-  it("ENVIRONMENT が未設定でも 401（開発環境と明示したときだけ仮のデバイスが効く）", async () => {
-    await expectProblem(
-      await post(makeSet(), { DEV_DEVICE_ID: env.DEV_DEVICE_ID }),
-      401,
-      "device_token_invalid",
-    );
-  });
-
-  it("存在しないデバイスだと 401 device_token_invalid", async () => {
-    await expectProblem(
-      await post(makeSet(), { ENVIRONMENT: "development", DEV_DEVICE_ID: crypto.randomUUID() }),
-      401,
-      "device_token_invalid",
-    );
-  });
 });
 
 describe("toSessionDate", () => {
@@ -340,14 +305,15 @@ describe("OpenAPI", () => {
 
 describe("DB の接続の失敗", () => {
   function postWith(target: { request: typeof app.request }) {
+    // 第 3 引数は Worker のバインディング。HYPERDRIVE を渡さない
     return target.request(
       "/api/v1/device/sets",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...auth },
         body: JSON.stringify(makeSet()),
       },
-      env,
+      {},
     );
   }
 

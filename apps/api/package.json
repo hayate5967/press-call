@@ -10,7 +10,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:check": "drizzle-kit check"
+    "db:check": "drizzle-kit check",
+    "device:issue-token": "tsx scripts/issue-device-token.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "1.6.3",
@@ -25,6 +26,7 @@
     "@electric-sql/pglite": "0.5.16",
     "@types/pg": "8.23.1",
     "drizzle-kit": "0.31.11",
+    "tsx": "4.23.15",
     "vitest": "5.1.0",
     "wrangler": "4.162.0"
   }

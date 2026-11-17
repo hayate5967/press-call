@@ -65,5 +65,6 @@ pio device monitor         # シリアル出力（生データの CSV）を見�
 ## 秘密情報
 
 - API：`apps/api/.dev.vars.example` を `.dev.vars` にコピーして値を入れる。本番は `wrangler secret put`
+- 開発用のデバイストークン：ペアリングができるまでは、`apps/api` で `pnpm device:issue-token --email <メール> --name <デバイス名>` を実行して発行する（既存のデバイスに足すなら `--device-id <UUID>`）。`.dev.vars` の `DATABASE_URL` に接続し、同じ `.dev.vars` に `ENVIRONMENT=development` があるときだけ動く（シェルで `DATABASE_URL` を渡すなら `ENVIRONMENT` もシェルで渡す）。書き込む前に接続先を表示して確認する（`--yes` で省略）。DB にはハッシュだけが入り、平文のトークンは画面に一度だけ出る
 - ファーム：`firmware/include/secrets.example.h` を `secrets.h` にコピー
 - どちらも `.gitignore` 済み。サンプル（`*.example*`）だけをコミットする

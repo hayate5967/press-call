@@ -6,6 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import type { Db } from "../../src/db/client";
 import * as schema from "../../src/db/schema";
 import { createApp } from "../../src/index";
+import { issueDeviceToken } from "../../src/services/device-tokens";
 
 const migrationsFolder = fileURLToPath(new URL("../../drizzle", import.meta.url).href);
 
@@ -16,7 +17,7 @@ export async function createTestDb() {
   return { db: db as unknown as Db, client };
 }
 
-/** ユーザーとデバイスを 1 つずつ作る */
+/** ユーザーとデバイスを 1 つずつ作り、デバイストークンを発行する */
 export async function seedDevice(db: Db, email = "lifter@example.com") {
   const [user] = await db.insert(schema.users).values({ email }).returning();
   if (!user) throw new Error("ユーザーを作れませんでした");
@@ -25,7 +26,8 @@ export async function seedDevice(db: Db, email = "lifter@example.com") {
     .values({ userId: user.id, name: "部室のベンチ" })
     .returning();
   if (!device) throw new Error("デバイスを作れませんでした");
-  return { userId: user.id, deviceId: device.id };
+  const { token, tokenId } = await issueDeviceToken(db, device.id);
+  return { userId: user.id, deviceId: device.id, token, tokenId };
 }
 
 /** PGlite の DB を使うアプリ。接続は全テストで共有するので close では何もしない */
