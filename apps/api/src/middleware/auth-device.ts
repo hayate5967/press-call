@@ -1,30 +1,35 @@
-// 【仮・ステップ3で削除】デバイスの認証。ステップ3でデバイストークン（Authorization: Bearer）の照合に
-// 置き換え、このファイルと DEV_DEVICE_ID は消す。
-// いまは開発環境（ENVIRONMENT=development）でだけ、DEV_DEVICE_ID のデバイスから届いたものとして扱う
-import { z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+// デバイス（ESP32）の認証（API 仕様書 1 章・5 章、ADR-0006）
+// Authorization: Bearer <デバイストークン> をハッシュし、device_tokens と照合する。
+// 認証できたら、デバイスと持ち主を c.var.device に入れる。記録はこの持ち主のものとして保存される
 import { createMiddleware } from "hono/factory";
-import { devices } from "../db/schema";
 import type { AppEnv } from "../env";
+import { hashDeviceToken } from "../lib/device-token";
+import { findDeviceByTokenHash, touchDevice } from "../repositories/devices";
 import { ApiError } from "./error";
 
-export const devDevice = createMiddleware<AppEnv>(async (c, next) => {
-  // 本番は wrangler.jsonc で ENVIRONMENT=production に固定している。
-  // 誤って本番に DEV_DEVICE_ID を登録しても、ここで弾かれて誰でも記録を送れる状態にはならない
-  if (c.env?.ENVIRONMENT !== "development") {
+const BEARER = /^Bearer[ ]+(\S+)[ ]*$/i;
+
+export const deviceAuth = createMiddleware<AppEnv>(async (c, next) => {
+  // ヘッダーがない・形が違うときも device_token_invalid にする。
+  // ESP32 にとってはどれも「ペアリングをやり直す」で、分けても動きが変わらないため
+  const match = BEARER.exec(c.req.header("Authorization") ?? "");
+  const token = match?.[1];
+  if (!token) {
     throw new ApiError(401, "device_token_invalid", "デバイスを確認できません");
   }
-  const deviceId = c.env.DEV_DEVICE_ID;
-  if (!deviceId || !z.uuid().safeParse(deviceId).success) {
+
+  const found = await findDeviceByTokenHash(c.var.db, await hashDeviceToken(token));
+  if (!found) {
     throw new ApiError(401, "device_token_invalid", "デバイスを確認できません");
   }
-  const [device] = await c.var.db
-    .select({ deviceId: devices.id, userId: devices.userId })
-    .from(devices)
-    .where(eq(devices.id, deviceId));
-  if (!device) {
-    throw new ApiError(401, "device_token_invalid", "デバイスを確認できません");
+  if (found.revokedAt) {
+    // ESP32 は記録を消さずに再ペアリングを待つ（API 仕様書 5 章）
+    throw new ApiError(401, "device_token_revoked", "デバイストークンは失効しています");
   }
-  c.set("device", device);
+
+  // デバイス向け API が呼ばれるたびに last_seen_at を更新する（API 仕様書 5 章）
+  await touchDevice(c.var.db, found.deviceId, found.tokenId);
+
+  c.set("device", { deviceId: found.deviceId, userId: found.userId });
   await next();
 });

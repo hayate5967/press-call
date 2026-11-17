@@ -8,11 +8,6 @@ export type Bindings = {
   HYPERDRIVE: Hyperdrive;
   /** 動いている環境。wrangler.jsonc では production、手元の .dev.vars で development に上書きする */
   ENVIRONMENT: "development" | "production";
-  /**
-   * 【ステップ3で削除】仮のデバイス。デバイストークン認証に置き換えるまでの一時的なもの。
-   * ENVIRONMENT=development のときだけ効く。.dev.vars にだけ書き、本番には登録しない
-   */
-  DEV_DEVICE_ID?: string;
 };
 
 export type Variables = {

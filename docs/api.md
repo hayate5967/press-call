@@ -474,12 +474,12 @@ GET は `GET /device/settings` と同じ形に `updatedAt` を足したもの。
 | HTTP | code | 意味 | 呼び出し側の対応 |
 | --- | --- | --- | --- |
 | 400 | `bad_request` | JSON が壊れているなど | 直さないと通らない |
-| 401 | `token_missing` | 認証ヘッダーがない | ログイン画面へ |
+| 401 | `token_missing` | 認証ヘッダーがない（user の API） | ログイン画面へ |
 | 401 | `token_expired` | アクセストークンの期限切れ | `/auth/refresh` してからやり直す |
 | 401 | `token_invalid` | 署名が不正など | ログイン画面へ |
 | 401 | `refresh_token_invalid` | リフレッシュトークンが無効・期限切れ | ログイン画面へ |
 | 401 | `refresh_token_reused` | 使用済みリフレッシュトークンの再利用（盗難の疑い） | ログイン画面へ。警告を表示 |
-| 401 | `device_token_invalid` | デバイストークンが存在しない | ペアリングをやり直す |
+| 401 | `device_token_invalid` | デバイストークンが存在しない。認証ヘッダーがない・形が違うときもこれ（ESP32 の対応が同じなので分けない） | ペアリングをやり直す |
 | 401 | `device_token_revoked` | デバイストークンが失効済み | 記録は残し、ペアリングを待つ |
 | 403 | `forbidden` | デバイストークンで user 用の API を呼んだなど | 実装の誤り |
 | 404 | `not_found` | 対象がない（他人のデータも含む） | — |
