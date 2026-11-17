@@ -22,5 +22,6 @@
 | [0007](./adr/0007-hosting.md) | ホスティング先 | 承認 |
 | [0008](./adr/0008-web-frontend.md) | Web アプリのフレームワーク | 承認 |
 | [0009](./adr/0009-raw-data-storage.md) | 生データの保存方法 | 承認 |
+| [0010](./adr/0010-api-test-environment.md) | API のテスト環境 | 承認 |
 
 新しい ADR は [0000-template.md](./adr/0000-template.md) をコピーして番号を振る。決定を変えるときは古い ADR を書き換えず、新しい ADR を作って古い方の状態を「置き換え」にする。

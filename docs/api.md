@@ -329,7 +329,7 @@ ESP32 は `200` か `201` を受け取ったときだけ、その記録をフラ
 - `velocityCurve` は 1 レップ 500 個まで、リクエスト全体は 64KB まで
 - 重量・RPE・メモはデバイスからは送らない（Web アプリで入力する）
 
-**時刻が合っていないとき（FR-S08）**：NTP で時刻を合わせる前に取った記録は、`startedAt` の代わりに `startedUptimeMs`（起動からの経過ミリ秒）と `sentUptimeMs`（送信時の経過ミリ秒）を送る。API は「受信時刻 −（sentUptimeMs − startedUptimeMs）」で開始時刻を推定する。
+**時刻が合っていないとき（FR-S08）**：補正はファームで行い、API は何もしない。NTP で時刻を合わせる前に取った記録は、ファームが NTP 同期の後に「現在時刻 −（現在の uptime − 記録時の uptime）」で実時刻に直してから、普通の `startedAt` / `endedAt` として送る（要件定義書 4.3 のメモ）。
 
 ### PUT /device/sets/{clientSetId}/raw
 
