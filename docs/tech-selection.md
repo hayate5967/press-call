@@ -108,7 +108,7 @@ Nov 13, 2026 · @Kato Hayate
 | 入力の検証 | Zod | Valibot | Hono との連携が最も充実。画面と API で同じスキーマを共有できる |
 | API 仕様書 | @hono/zod-openapi（コードから OpenAPI を生成し、Swagger UI で閲覧） | OpenAPI の YAML を先に手書き | 仕様書と実装がずれない。設計段階では先にエンドポイント一覧をドキュメントで合意してから書く |
 | JWT ライブラリ | jose | hono/jwt | Web Crypto ベースで Workers 対応。ES256 や鍵の切り替え（kid）まで扱える |
-| API・画面のテスト | Vitest（API は @cloudflare/vitest-pool-workers で本番に近い環境） | Jest | Vite と設定を共有でき、速い |
+| API・画面のテスト | Vitest（API は Node 上で動かし、DB は PGlite。Workers 固有の確認は `wrangler deploy --dry-run` とデプロイで行う。ADR-010） | Jest、@cloudflare/vitest-pool-workers | Vite と設定を共有でき、速い。PGlite なら秘密情報なしで本物の PostgreSQL を使ってテストできる |
 | Lint・整形 | Biome | ESLint＋Prettier | 1 つのツールで済み、設定が少なく速い |
 | ファームの開発環境 | PlatformIO＋Arduino フレームワーク | ESP-IDF、Arduino IDE | 既存コードを流用でき、コマンドラインで CI に載せられる |
 | ファームのテスト | 判定ロジックをハードに依存しない C++ に分け、PC 上で実行（PlatformIO の native 環境＋Unity） | 実機でのみ確認 | 記録した生データを入力にしたテストが CI で回せる（NFR-12） |

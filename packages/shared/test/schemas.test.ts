@@ -44,9 +44,56 @@ describe("createSetInputSchema", () => {
     expect(createSetInputSchema.safeParse({ ...baseSet, reps }).success).toBe(false);
   });
 
+  it("回数記録モードでレップに pauseTargetMs や reactionMs があると弾く", () => {
+    const set = { ...baseSet, mode: "count_only" as const, pause: null };
+    expect(createSetInputSchema.safeParse(set).success).toBe(false);
+    const reps = [{ ...baseSet.reps[0], pauseTargetMs: null, reactionMs: null }];
+    expect(createSetInputSchema.safeParse({ ...set, reps }).success).toBe(true);
+  });
+
   it("開始が終了より後だと弾く", () => {
     const set = { ...baseSet, startedAt: baseSet.endedAt, endedAt: baseSet.startedAt };
     expect(createSetInputSchema.safeParse(set).success).toBe(false);
+  });
+});
+
+describe("createSetInputSchema：DB の型に入らない値", () => {
+  const rep = baseSet.reps[0] as (typeof baseSet.reps)[number];
+  const withRep = (r: Partial<typeof rep>) => ({ ...baseSet, reps: [{ ...rep, ...r }] });
+
+  it("int の上限（2147483647）を超える時間を弾く", () => {
+    expect(createSetInputSchema.safeParse(withRep({ startOffsetMs: 2_147_483_647 })).success).toBe(
+      true,
+    );
+    expect(createSetInputSchema.safeParse(withRep({ startOffsetMs: 3_000_000_000 })).success).toBe(
+      false,
+    );
+  });
+
+  it("smallint の上限（32767）を超える curveHz を弾く", () => {
+    expect(createSetInputSchema.safeParse(withRep({ curveHz: 40_000 })).success).toBe(false);
+  });
+
+  it("real で表せないほど大きい速度を弾く", () => {
+    expect(createSetInputSchema.safeParse(withRep({ velocityCurve: [0.1, 1e39] })).success).toBe(
+      false,
+    );
+    expect(createSetInputSchema.safeParse(withRep({ peakVelocityMps: 1e39 })).success).toBe(false);
+  });
+
+  it("負の平均速度は引き続き弾く", () => {
+    expect(createSetInputSchema.safeParse(withRep({ meanVelocityMps: -0.1 })).success).toBe(false);
+  });
+});
+
+describe("createSetInputSchema：回数記録モードのフライング", () => {
+  it("count_only で isPremature: true を弾く", () => {
+    const rep = { ...baseSet.reps[0], pauseTargetMs: null, reactionMs: null };
+    const set = { ...baseSet, mode: "count_only" as const, pause: null };
+    expect(createSetInputSchema.safeParse({ ...set, reps: [rep] }).success).toBe(true);
+    expect(
+      createSetInputSchema.safeParse({ ...set, reps: [{ ...rep, isPremature: true }] }).success,
+    ).toBe(false);
   });
 });
 

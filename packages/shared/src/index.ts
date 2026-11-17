@@ -50,20 +50,35 @@ export const deviceSettingsSchema = z.object({
 });
 export type DeviceSettings = z.infer<typeof deviceSettingsSchema>;
 
+/*
+ * DB の列の型に入る範囲。ここを超える値が DB まで届くと INSERT が失敗して 500 になり、
+ * ESP32 は「一時的な失敗」とみなして永久に再送してしまう。入口で 422 にして再送を止める
+ */
+const INT4_MAX = 2_147_483_647; // PostgreSQL の int
+const INT2_MAX = 32_767; // PostgreSQL の smallint
+const msInt = z.number().int().nonnegative().max(INT4_MAX);
+/** PostgreSQL の real（32 ビット浮動小数点数）で表せる大きさか */
+const float4 = z
+  .number()
+  .refine(
+    (v) => Number.isFinite(Math.fround(v)),
+    "real（32 ビット浮動小数点数）の範囲を超えています",
+  );
+
 /** レップ（POST /device/sets の reps[]） */
 export const repInputSchema = z.object({
-  index: z.number().int().min(1),
-  startOffsetMs: z.number().int().nonnegative(),
-  eccentricMs: z.number().int().nonnegative().nullable(),
-  pauseTargetMs: z.number().int().nonnegative().nullable(),
-  pauseActualMs: z.number().int().nonnegative().nullable(),
-  reactionMs: z.number().int().nonnegative().nullable(),
+  index: z.number().int().min(1).max(INT2_MAX),
+  startOffsetMs: msInt,
+  eccentricMs: msInt.nullable(),
+  pauseTargetMs: msInt.nullable(),
+  pauseActualMs: msInt.nullable(),
+  reactionMs: msInt.nullable(),
   isPremature: z.boolean(),
-  concentricMs: z.number().int().nonnegative().nullable(),
-  meanVelocityMps: z.number().nonnegative().nullable(),
-  peakVelocityMps: z.number().nonnegative().nullable(),
-  curveHz: z.number().int().positive().nullable(),
-  velocityCurve: z.array(z.number()).max(500).nullable(),
+  concentricMs: msInt.nullable(),
+  meanVelocityMps: float4.nonnegative().nullable(),
+  peakVelocityMps: float4.nonnegative().nullable(),
+  curveHz: z.number().int().positive().max(INT2_MAX).nullable(),
+  velocityCurve: z.array(float4).max(500).nullable(),
 });
 export type RepInput = z.infer<typeof repInputSchema>;
 
@@ -86,8 +101,27 @@ export const createSetInputSchema = z
   .refine((s) => s.reps.every((r, i) => r.index === i + 1), {
     message: "reps[].index は 1 からの連番にしてください",
     path: ["reps"],
-  });
+  })
+  .refine(
+    (s) =>
+      s.mode === "auto_signal" ||
+      s.reps.every((r) => r.pauseTargetMs === null && r.reactionMs === null && !r.isPremature),
+    {
+      // 合図がないので、待ち時間・反応時間・フライングは存在しない
+      message:
+        "count_only では reps[].pauseTargetMs と reps[].reactionMs は null、reps[].isPremature は false にしてください",
+      path: ["reps"],
+    },
+  );
 export type CreateSetInput = z.infer<typeof createSetInputSchema>;
+
+/** POST /device/sets のレスポンス（初回は 201・created: true、再送は 200・created: false） */
+export const createSetResultSchema = z.object({
+  setId: z.uuid(),
+  sessionId: z.uuid(),
+  created: z.boolean(),
+});
+export type CreateSetResult = z.infer<typeof createSetResultSchema>;
 
 /** PATCH /sets/{setId} のリクエスト（重量は 0.5kg 刻み、RPE は 0.5 刻み） */
 const halfStep = (n: number) => Number.isInteger(n * 2);
