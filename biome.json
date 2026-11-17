@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/.wrangler", "!firmware", "!docs"]
+    "includes": ["**", "!**/dist", "!**/.wrangler", "!firmware", "!docs", "!apps/api/drizzle"]
   },
   "formatter": {
     "enabled": true,
