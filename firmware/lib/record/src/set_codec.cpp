@@ -142,14 +142,14 @@ std::string encodeRepsJson(const SetRecord& set, size_t budget) {
 }
 
 std::string encodeHeader(const StoredSetHeader& h) {
-    char out[192];
+    char out[208];
     std::snprintf(out, sizeof(out),
-                  "PCS1 %s %" PRIu32 " %" PRIu64 " %" PRIu64 " %" PRId64 " %" PRIu32
-                  " %c %" PRIu32 " %" PRIu32,
+                  "PCS2 %s %" PRIu32 " %" PRIu64 " %" PRIu64 " %" PRId64 " %" PRIu32
+                  " %c %" PRIu32 " %" PRIu32 " %" PRIu32,
                   h.clientSetId.c_str(), h.bootId, h.startedUptimeMs, h.endedUptimeMs,
                   h.startedEpochMs, h.settings.settingsVersion,
                   h.settings.mode == Mode::AutoSignal ? 'A' : 'C', h.settings.pauseMinMs,
-                  h.settings.pauseMaxMs);
+                  h.settings.pauseMaxMs, h.ownerFingerprint);
     return out;
 }
 
@@ -158,13 +158,25 @@ bool decodeHeader(const std::string& line, StoredSetHeader& out) {
     char mode = 0;
     StoredSetHeader h;
     int consumed = 0;
-    const int n = std::sscanf(line.c_str(),
-                              "PCS1 %39s %" SCNu32 " %" SCNu64 " %" SCNu64 " %" SCNd64 " %" SCNu32
+    // 共通の項目。PCS1（ペアリング前の形式）には末尾の指紋がない
+    const bool v2 = line.rfind("PCS2 ", 0) == 0;
+    if (!v2 && line.rfind("PCS1 ", 0) != 0) return false;
+    const int n = std::sscanf(line.c_str() + 5,
+                              "%39s %" SCNu32 " %" SCNu64 " %" SCNu64 " %" SCNd64 " %" SCNu32
                               " %c %" SCNu32 " %" SCNu32 "%n",
                               id, &h.bootId, &h.startedUptimeMs, &h.endedUptimeMs,
                               &h.startedEpochMs, &h.settings.settingsVersion, &mode,
                               &h.settings.pauseMinMs, &h.settings.pauseMaxMs, &consumed);
-    if (n != 9 || static_cast<size_t>(consumed) != line.size()) return false;
+    if (n != 9) return false;
+    size_t used = 5 + static_cast<size_t>(consumed);
+    if (v2) {
+        int more = 0;
+        if (std::sscanf(line.c_str() + used, " %" SCNu32 "%n", &h.ownerFingerprint, &more) != 1) {
+            return false;
+        }
+        used += static_cast<size_t>(more);
+    }
+    if (used != line.size()) return false;
     if (std::strlen(id) != 36 || (mode != 'A' && mode != 'C')) return false;
     if (h.endedUptimeMs < h.startedUptimeMs) return false;
     h.clientSetId = id;

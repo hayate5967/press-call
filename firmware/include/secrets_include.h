@@ -11,7 +11,12 @@
 #define PRESSCALL_SECRETS_ARE_PLACEHOLDERS 1
 #endif
 
-#if !defined(TETHERING_SSID) || !defined(TETHERING_PASSWORD) || !defined(API_BASE_URL) || \
-    !defined(DEVICE_TOKEN)
-#error "secrets.h に TETHERING_SSID・TETHERING_PASSWORD・API_BASE_URL・DEVICE_TOKEN を書いてください（secrets.example.h を参照）"
+#if !defined(TETHERING_SSID) || !defined(TETHERING_PASSWORD) || !defined(API_BASE_URL)
+#error "secrets.h に TETHERING_SSID・TETHERING_PASSWORD・API_BASE_URL を書いてください（secrets.example.h を参照）"
+#endif
+
+// デバイストークンはペアリングで受け取って NVS に保存するようになった（ステップ 5-2）。
+// 古い secrets.h に残っていても使わない
+#if defined(DEVICE_TOKEN)
+#warning "secrets.h の DEVICE_TOKEN は使われません（ペアリングで受け取ります）。消してかまいません"
 #endif

@@ -4,6 +4,7 @@
 #include <esp_random.h>
 
 #include "device_clock.h"
+#include "net_task.h"
 #include "set_codec.h"
 #include "set_store.h"
 
@@ -27,6 +28,7 @@ void persist(const SetRecord& set) {
     h.startedUptimeMs = set.startedUptimeMs;
     h.endedUptimeMs = set.endedUptimeMs;
     h.settings = set.settings;
+    h.ownerFingerprint = net::ownerFingerprint();  // ペアリングし直した後に、前の持ち主の記録を送らない
     if (clock::timeSynced()) {
         // 今の実時刻から、経過時間ぶん戻す（FR-S08）
         h.startedEpochMs =

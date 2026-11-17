@@ -18,6 +18,13 @@ enum class SendOutcome : uint8_t {
 /** HTTP の状態コード（通信失敗なら 0 以下）と応答本文から、扱いを決める */
 SendOutcome classifyResponse(int status, const std::string& body);
 
+/**
+ * 保存した記録を、今のトークンで送ってよいか。
+ * 記録したときの持ち主（トークンの指紋）が今と同じか、ペアリング前の記録（0）なら送る。
+ * 違えば前の持ち主の記録なので、新しい持ち主のアカウントに入れないよう送らない（2026-11-17 決定）
+ */
+bool belongsToCurrentOwner(uint32_t recordFingerprint, uint32_t currentFingerprint);
+
 /** 失敗が failures 回続いたときの、次の再送までの待ち時間（5 秒から倍々、最大 5 分） */
 uint32_t retryDelayMs(uint32_t failures);
 

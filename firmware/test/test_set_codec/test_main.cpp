@@ -80,6 +80,36 @@ void test_header_round_trip() {
     TEST_ASSERT_EQUAL(Mode::AutoSignal, back.settings.mode);
     TEST_ASSERT_EQUAL_UINT32(500, back.settings.pauseMinMs);
     TEST_ASSERT_EQUAL_UINT32(1500, back.settings.pauseMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(0, back.ownerFingerprint);
+}
+
+void test_header_keeps_owner_fingerprint() {
+    StoredSetHeader h = sampleHeader();
+    h.ownerFingerprint = 4000000000u;
+    StoredSetHeader back;
+    const std::string line = encodeHeader(h);
+    TEST_ASSERT_EQUAL_STRING("PCS2", line.substr(0, 4).c_str());
+    TEST_ASSERT_TRUE(decodeHeader(line, back));
+    TEST_ASSERT_EQUAL_UINT32(4000000000u, back.ownerFingerprint);
+}
+
+void test_header_reads_old_format_without_owner() {
+    // ペアリングを入れる前に保存したファイル（PCS1）も読める。持ち主は不明（0）
+    StoredSetHeader back;
+    TEST_ASSERT_TRUE(decodeHeader(
+        "PCS1 c5d2e0f4-1111-4222-8333-444455556666 7 60000 89500 0 4 A 500 1500", back));
+    TEST_ASSERT_EQUAL_UINT32(7, back.bootId);
+    TEST_ASSERT_EQUAL_UINT32(1500, back.settings.pauseMaxMs);
+    TEST_ASSERT_EQUAL_UINT32(0, back.ownerFingerprint);
+    // PCS1 に指紋が付いているのは壊れたファイル
+    TEST_ASSERT_FALSE(decodeHeader(
+        "PCS1 c5d2e0f4-1111-4222-8333-444455556666 7 60000 89500 0 4 A 500 1500 99", back));
+}
+
+void test_records_of_previous_owner_are_not_sent() {
+    TEST_ASSERT_TRUE(belongsToCurrentOwner(1234, 1234));
+    TEST_ASSERT_TRUE(belongsToCurrentOwner(0, 1234));  // ペアリング前の記録は次の持ち主へ
+    TEST_ASSERT_FALSE(belongsToCurrentOwner(1234, 5678));
 }
 
 void test_header_rejects_broken_lines() {
@@ -209,6 +239,9 @@ int main() {
     RUN_TEST(test_time_known_at_record);
     RUN_TEST(test_time_corrected_after_ntp_same_boot);
     RUN_TEST(test_time_unrecoverable_across_reboot);
+    RUN_TEST(test_header_keeps_owner_fingerprint);
+    RUN_TEST(test_header_reads_old_format_without_owner);
+    RUN_TEST(test_records_of_previous_owner_are_not_sent);
     RUN_TEST(test_classify_response);
     RUN_TEST(test_retry_delay_backs_off);
     return UNITY_END();
