@@ -1,5 +1,5 @@
 // デバイスとデバイストークンの DB アクセス
-import { sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { devices, deviceTokens } from "../db/schema";
 
@@ -69,4 +69,49 @@ export async function insertDeviceToken(db: Db, deviceId: string, tokenHash: str
     .returning({ id: deviceTokens.id });
   if (!row) throw new Error("デバイストークンを保存できませんでした");
   return row.id;
+}
+
+/** デバイスを作る（ペアリングの許可時） */
+export async function insertDevice(db: Db, userId: string, name: string): Promise<string> {
+  const [row] = await db.insert(devices).values({ userId, name }).returning({ id: devices.id });
+  if (!row) throw new Error("デバイスを作れませんでした");
+  return row.id;
+}
+
+export type DeviceSummary = {
+  id: string;
+  name: string;
+  lastSeenAt: Date | null;
+  active: boolean;
+  createdAt: Date;
+};
+
+// 副問い合わせの中では Drizzle が ${devices.id} を表名なしの "id" にしてしまい、t.id と取り違える。
+// そのため外側の表の列は "devices"."id" と表名つきで書く
+const activeColumn = sql<boolean>`exists (
+  select 1 from ${deviceTokens} t where t.device_id = "devices"."id" and t.revoked_at is null
+)`;
+
+/** 持ち主のデバイスの一覧（新しい順）。active は有効なトークンがあるか */
+export async function listDevices(db: Db, userId: string): Promise<DeviceSummary[]> {
+  return db
+    .select({
+      id: devices.id,
+      name: devices.name,
+      lastSeenAt: devices.lastSeenAt,
+      active: activeColumn,
+      createdAt: devices.createdAt,
+    })
+    .from(devices)
+    .where(eq(devices.userId, userId))
+    .orderBy(desc(devices.createdAt));
+}
+
+/** 持ち主のデバイスなら true（他人のデバイス・存在しないデバイスは区別しない） */
+export async function isOwnedDevice(db: Db, userId: string, deviceId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: devices.id })
+    .from(devices)
+    .where(and(eq(devices.id, deviceId), eq(devices.userId, userId)));
+  return row !== undefined;
 }
