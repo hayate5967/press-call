@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createSetInputSchema, deviceSettingsInputSchema, updateSetInputSchema } from "../src";
+import {
+  createSetInputSchema,
+  deviceSettingsInputSchema,
+  STILL_THRESHOLD_MAX_MPS,
+  updateSetInputSchema,
+} from "../src";
 
 const baseSet = {
   clientSetId: "5b0e8f8a-3c2d-4b7e-9a1f-2d3c4b5a6f70",
@@ -114,6 +119,18 @@ describe("deviceSettingsInputSchema", () => {
       stillThreshold: null,
     };
     expect(deviceSettingsInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it.each([
+    [0.05, true],
+    [0.149, true],
+    [STILL_THRESHOLD_MAX_MPS, false], // 動き出しのしきい値と同じ値はだめ
+    [0.2, false],
+    [0, false],
+    [-0.01, false],
+  ])("stillThreshold %s → %s", (stillThreshold, ok) => {
+    const input = { mode: "count_only", pause: null, stillThreshold };
+    expect(deviceSettingsInputSchema.safeParse(input).success).toBe(ok);
   });
 });
 

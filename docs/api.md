@@ -254,7 +254,7 @@ sequenceDiagram
 
 ## 5. デバイス向け API
 
-ESP32 がデバイストークンで呼ぶ API は 3 本だけ。どれかが呼ばれるたびに、そのデバイスの `last_seen_at` を更新する。
+ESP32 がデバイストークンで呼ぶ API は 3 本だけ。どれかが呼ばれると、そのデバイスの `last_seen_at`（とトークンの `last_used_at`）を更新する。ただし設定は数秒おきに問い合わせるので、前回の更新から 1 分以内なら書き直さない（2026-11-17 決定。DB の書き込みを減らすため）。
 
 ### GET /device/settings
 
@@ -278,7 +278,9 @@ If-None-Match: "3"          ← 手元の設定の version
 
 - 変わっていなければ `304 Not Modified`（ボディなし）。
 - `pause` は固定なら `{ "mode": "fixed", "fixedMs": 1000 }`、回数記録モードなら `null`。
-- `stillThreshold` が `null` ならファームの既定値を使う。
+- `stillThreshold` が `null` ならファームの既定値を使う。範囲外（0 以下、または 0.15 m/s 以上）の値を受け取ったら、ファームは警告をログに出して既定値を使う（待ち時間などほかの設定は使う）。
+- ESP32 は 5 秒おきに問い合わせ、セット中は止める。新しい設定はセットの合間に反映し、LittleFS に保存して次の起動でも使う（FR-D10）。
+- 設定の行がないデバイスには、初期設定（自動合図・固定 1.0 秒・しきい値は既定値）の行を作って返す。
 
 ### POST /device/sets
 
@@ -467,7 +469,7 @@ GET は `GET /device/settings` と同じ形に `updatedAt` を足したもの。
 { "version": 5, "mode": "auto_signal", "pause": { "mode": "fixed", "fixedMs": 1000 }, "stillThreshold": null, "updatedAt": "..." }
 ```
 
-ルール：待ち時間は 200〜5000ms、ランダムは minMs ≦ maxMs。回数記録モードなら `pause` は `null`。更新のたびに `version` が 1 増え、ESP32 は次の問い合わせで新しい設定を受け取る。
+ルール：待ち時間は 200〜5000ms、ランダムは minMs ≦ maxMs。回数記録モードなら `pause` は `null`。`stillThreshold` は `null`（ファームの既定値）か、0 より大きく 0.15 m/s 未満（`packages/shared` の `STILL_THRESHOLD_MAX_MPS`。理由は ADR-0003）。更新のたびに `version` が 1 増え、ESP32 は次の問い合わせで新しい設定を受け取る。
 
 ## 7. エラーコード一覧
 

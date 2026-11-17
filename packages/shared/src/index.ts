@@ -7,6 +7,21 @@ export const PAUSE_MAX_MS = 5000;
 
 const pauseMs = z.number().int().min(PAUSE_MIN_MS).max(PAUSE_MAX_MS);
 
+/**
+ * 静止のしきい値（m/s）の上限（この値は含まない）。ファームの「動き出した」とみなす速さ
+ * （firmware/lib/detection の DetectorConfig.moveVelocity）と同じ値。
+ * 静止のしきい値がこれ以上だと「止まっている」と「動いている」の判定が重なり、
+ * 胸の上で止まる前の減速や挙上の始まりも静止とみなしてしまう（ADR-0003）
+ */
+export const STILL_THRESHOLD_MAX_MPS = 0.15;
+
+const stillThreshold = z
+  .number()
+  .positive()
+  .lt(STILL_THRESHOLD_MAX_MPS, {
+    message: `stillThreshold は ${STILL_THRESHOLD_MAX_MPS} 未満にしてください（動き出しの判定と重ならないように）`,
+  });
+
 /** 待ち時間の設定：固定 or ランダム */
 export const pauseSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("fixed"), fixedMs: pauseMs }),
@@ -36,7 +51,7 @@ export const deviceSettingsInputSchema = z
   .object({
     mode: modeSchema,
     pause: pauseSchema.nullable(),
-    stillThreshold: z.number().positive().nullable(),
+    stillThreshold: stillThreshold.nullable(),
   })
   .refine(pauseMatchesMode, pauseModeMessage);
 export type DeviceSettingsInput = z.infer<typeof deviceSettingsInputSchema>;
@@ -46,7 +61,7 @@ export const deviceSettingsSchema = z.object({
   version: z.number().int().nonnegative(),
   mode: modeSchema,
   pause: pauseSchema.nullable(),
-  stillThreshold: z.number().positive().nullable(),
+  stillThreshold: stillThreshold.nullable(),
 });
 export type DeviceSettings = z.infer<typeof deviceSettingsSchema>;
 
