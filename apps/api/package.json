@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
-    "device:issue-token": "tsx scripts/issue-device-token.ts"
+    "device:issue-token": "tsx scripts/issue-device-token.ts",
+    "device:settings": "tsx scripts/set-device-settings.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "1.6.3",
