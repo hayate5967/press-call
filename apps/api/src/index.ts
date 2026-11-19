@@ -1,7 +1,7 @@
 // Worker の入口。/api/v1 以下を Hono が処理し、それ以外は静的ファイル（Web アプリ）が返る
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { openDb } from "./db/client";
-import type { AppEnv } from "./env";
+import type { AppEnv, Bindings } from "./env";
 import { type CreateGoogle, createArcticGoogle } from "./lib/google";
 import { type OpenDb, withDb } from "./middleware/db";
 import { onError, onNotFound } from "./middleware/error";
@@ -13,16 +13,24 @@ import { pairing } from "./routes/pairing";
 
 export type { Bindings } from "./env";
 
-/** 本番・wrangler dev では Hyperdrive 経由で Neon につなぐ */
-const openHyperdrive: OpenDb = (env) => {
-  // wrangler.jsonc に hyperdrive がないのは設定の誤り。503 ではなく 500 にして気づけるようにする
-  if (!env.HYPERDRIVE) {
-    throw new Error(
-      "HYPERDRIVE バインディングがありません（wrangler.jsonc の hyperdrive を設定する）",
-    );
-  }
-  return openDb(env.HYPERDRIVE.connectionString);
-};
+/**
+ * DB の接続文字列を選ぶ。
+ * - 本番：Hyperdrive 経由で Neon につなぐ
+ * - 手元の開発（ENVIRONMENT=development）で Hyperdrive がないとき：.dev.vars の DATABASE_URL
+ *   （Neon の開発用ブランチ）に直接つなぐ。本番で DATABASE_URL に流れないよう、開発と明示したときだけ
+ */
+export function connectionStringFor(
+  env: Pick<Bindings, "HYPERDRIVE" | "ENVIRONMENT" | "DATABASE_URL">,
+): string {
+  if (env.HYPERDRIVE) return env.HYPERDRIVE.connectionString;
+  if (env.ENVIRONMENT === "development" && env.DATABASE_URL) return env.DATABASE_URL;
+  // どちらもないのは設定の誤り。503 ではなく 500 にして気づけるようにする
+  throw new Error(
+    "DB の接続先がありません（本番は wrangler.jsonc の hyperdrive、手元は .dev.vars の DATABASE_URL と ENVIRONMENT=development）",
+  );
+}
+
+const openConfiguredDb: OpenDb = (env) => openDb(connectionStringFor(env));
 
 export type AppOptions = {
   openDb: OpenDb;
@@ -33,7 +41,7 @@ export type AppOptions = {
 /** アプリを組み立てる。テストでは DB の開き方（PGlite）と Google を差し替える */
 export function createApp(overrides: Partial<AppOptions> = {}) {
   const options: AppOptions = {
-    openDb: openHyperdrive,
+    openDb: openConfiguredDb,
     createGoogle: createArcticGoogle,
     ...overrides,
   };
