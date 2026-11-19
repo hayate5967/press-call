@@ -10,7 +10,8 @@ GOOGLE_CLIENT_SECRET=
 # JWT 署名用の ES256 秘密鍵（JWK 形式の JSON を 1 行で）。pnpm --filter @press-call/api auth:generate-key で作る
 JWT_PRIVATE_JWK=
 
-# 手元の開発で使う Neon の開発用ブランチの接続文字列
+# 手元の開発で使う Neon の開発用ブランチの接続文字列（pooling オフ）。
+# pnpm dev（Hyperdrive の代わりの接続先）と pnpm db:migrate が使う。本番の接続文字列は入れない
 DATABASE_URL=
 
 # 手元の開発環境であることを示す（wrangler.jsonc の production を上書きする）

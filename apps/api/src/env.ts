@@ -15,8 +15,6 @@ export type Bindings = {
   JWT_PRIVATE_JWK: string;
   /** 外から見たオリジン（任意）。手元の開発で Vite 経由にするとき http://localhost:5173 を入れる */
   PUBLIC_ORIGIN?: string;
-  /** 手元の開発だけで使う Neon の開発用ブランチ（.dev.vars）。ENVIRONMENT=development のときだけ使う */
-  DATABASE_URL?: string;
 };
 
 /** アクセストークンで確認できたユーザー */
