@@ -1,6 +1,11 @@
 // デバイスの設定（モード・待ち時間・静止のしきい値）の DB アクセス
-import type { DeviceSettings, DeviceSettingsInput, Pause } from "@press-call/shared";
-import { eq, sql } from "drizzle-orm";
+import type {
+  DeviceSettings,
+  DeviceSettingsDetail,
+  DeviceSettingsInput,
+  Pause,
+} from "@press-call/shared";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { deviceSettings } from "../db/schema";
 
@@ -83,4 +88,45 @@ export async function replaceDeviceSettings(
     .returning();
   if (!row) throw new Error("設定を保存できませんでした");
   return toSettings(row);
+}
+
+/** 設定と更新日時（Web アプリ向け。GET・PUT /devices/{deviceId}/settings） */
+export async function findDeviceSettingsDetail(
+  db: Db,
+  deviceId: string,
+): Promise<DeviceSettingsDetail | undefined> {
+  const [row] = await db.select().from(deviceSettings).where(eq(deviceSettings.deviceId, deviceId));
+  return row && { ...toSettings(row), updatedAt: row.updatedAt.toISOString() };
+}
+
+/**
+ * 設定を置き換えて version を 1 つ進める。行があることが前提。
+ * expectedVersions を渡したときは、今の version がそのどれかのときだけ更新する
+ * （If-Match。別の画面での変更を上書きしないため）。更新できなければ undefined
+ */
+export async function updateDeviceSettingsRow(
+  db: Db,
+  deviceId: string,
+  input: DeviceSettingsInput,
+  expectedVersions?: number[],
+): Promise<DeviceSettingsDetail | undefined> {
+  const [row] = await db
+    .update(deviceSettings)
+    .set({
+      mode: input.mode,
+      ...pauseColumns(input.pause),
+      stillThreshold: input.stillThreshold,
+      version: sql`${deviceSettings.version} + 1`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      expectedVersions === undefined
+        ? eq(deviceSettings.deviceId, deviceId)
+        : and(
+            eq(deviceSettings.deviceId, deviceId),
+            inArray(deviceSettings.version, expectedVersions),
+          ),
+    )
+    .returning();
+  return row && { ...toSettings(row), updatedAt: row.updatedAt.toISOString() };
 }

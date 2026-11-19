@@ -12,13 +12,16 @@
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
     "device:issue-token": "tsx scripts/issue-device-token.ts",
-    "device:settings": "tsx scripts/set-device-settings.ts"
+    "device:settings": "tsx scripts/set-device-settings.ts",
+    "auth:generate-key": "tsx scripts/generate-jwt-key.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "1.6.3",
     "@press-call/shared": "workspace:*",
+    "arctic": "3.7.0",
     "drizzle-orm": "0.45.4",
     "hono": "4.13.18",
+    "jose": "6.2.14",
     "pg": "8.23.1",
     "zod": "4.6.7"
   },

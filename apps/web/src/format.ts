@@ -1,8 +1,14 @@
-import type { Health } from "@press-call/shared";
+// 画面に出す値の書式
 
-/** API の接続状態を画面用の文言にする */
-export function formatApiStatus(health: Health | null, error: string | null): string {
-  if (error) return `API に接続できません：${error}`;
-  if (!health) return "API に接続中…";
-  return `API に接続しました（${health.time}）`;
+const dateTime = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** ISO 8601 の日時を日本時間の「11/15 18:30」の形にする */
+export function formatDateTime(iso: string): string {
+  return dateTime.format(new Date(iso));
 }

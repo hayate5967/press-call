@@ -153,3 +153,133 @@ export const healthSchema = z.object({
   time: z.iso.datetime(),
 });
 export type Health = z.infer<typeof healthSchema>;
+
+// ---------- ユーザー認証（API 仕様書 3 章） ----------
+
+/** POST /auth/refresh のレスポンス。リフレッシュトークンは Cookie で返るのでここには入らない */
+export const accessTokenResponseSchema = z.object({
+  accessToken: z.string().min(1),
+  /** アクセストークンの残り秒数 */
+  expiresIn: z.number().int().positive(),
+});
+export type AccessTokenResponse = z.infer<typeof accessTokenResponseSchema>;
+
+/** GET /me のレスポンス */
+export const meSchema = z.object({
+  id: z.uuid(),
+  email: z.string(),
+  displayName: z.string().nullable(),
+});
+export type Me = z.infer<typeof meSchema>;
+
+/**
+ * ログインに失敗したときに /login?error=<code> に付くコード
+ * - oauth_denied：Google の画面でキャンセルした
+ * - oauth_state_mismatch：state が一致しない（CSRF の疑い、または 10 分以上かかった）
+ * - oauth_failed：Google とのやり取りに失敗した
+ */
+export const LOGIN_ERROR_CODES = ["oauth_denied", "oauth_state_mismatch", "oauth_failed"] as const;
+export type LoginErrorCode = (typeof LOGIN_ERROR_CODES)[number];
+
+// ---------- ペアリング（API 仕様書 4 章、RFC 8628） ----------
+
+/**
+ * userCode に使う文字（RFC 8628 6.1 の推奨：母音と、0/O・1/I のような紛らわしい文字を除いた子音 20 文字）。
+ * 母音がないので、たまたま単語になることもない
+ */
+export const USER_CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ";
+export const USER_CODE_LENGTH = 8;
+
+/**
+ * 人が入力した userCode を DB の形（大文字 8 文字、ハイフンなし）にそろえる。
+ * 大文字小文字・ハイフン・空白の違いは区別しない（API 仕様書 4 章）。使えない文字があれば null
+ */
+export function normalizeUserCode(input: string): string | null {
+  const code = input.toUpperCase().replace(/[\s-]/g, "");
+  if (code.length !== USER_CODE_LENGTH) return null;
+  for (const ch of code) if (!USER_CODE_ALPHABET.includes(ch)) return null;
+  return code;
+}
+
+/** 表示用の形（BCDF-GHJK） */
+export function formatUserCode(code: string): string {
+  return `${code.slice(0, 4)}-${code.slice(4)}`;
+}
+
+/** POST /device/authorize のリクエスト */
+export const deviceAuthorizeInputSchema = z.object({
+  firmwareVersion: z.string().max(32).optional(),
+});
+
+/** POST /device/authorize のレスポンス */
+export const deviceAuthorizeResponseSchema = z.object({
+  deviceCode: z.string(),
+  userCode: z.string(),
+  verificationUri: z.url(),
+  verificationUriComplete: z.url(),
+  expiresIn: z.number().int().positive(),
+  interval: z.number().int().positive(),
+});
+export type DeviceAuthorizeResponse = z.infer<typeof deviceAuthorizeResponseSchema>;
+
+export const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
+
+/** POST /device/token のリクエスト */
+export const deviceTokenInputSchema = z.object({
+  grantType: z.string(),
+  deviceCode: z.string().min(1).max(100),
+});
+
+/** POST /device/token の 200 レスポンス（トークンはこの 1 回だけ返す） */
+export const deviceTokenResponseSchema = z.object({
+  accessToken: z.string(),
+  tokenType: z.literal("Bearer"),
+  deviceId: z.uuid(),
+});
+export type DeviceTokenResponse = z.infer<typeof deviceTokenResponseSchema>;
+
+/** POST /device/token の 400 レスポンスの error（RFC 8628 3.5、RFC 6749 5.2） */
+export const DEVICE_TOKEN_ERRORS = [
+  "authorization_pending",
+  "slow_down",
+  "access_denied",
+  "expired_token",
+  "invalid_grant",
+  "invalid_request",
+  "unsupported_grant_type",
+] as const;
+export const deviceTokenErrorSchema = z.object({ error: z.enum(DEVICE_TOKEN_ERRORS) });
+
+export const deviceNameSchema = z.string().trim().min(1).max(50);
+
+/** POST /pairings/approve のリクエスト */
+export const approvePairingInputSchema = z.object({
+  userCode: z.string().max(20),
+  deviceName: deviceNameSchema,
+});
+export type ApprovePairingInput = z.infer<typeof approvePairingInputSchema>;
+
+/** POST /pairings/deny のリクエスト */
+export const denyPairingInputSchema = z.object({ userCode: z.string().max(20) });
+
+export const approvePairingResultSchema = z.object({ deviceId: z.uuid() });
+
+// ---------- デバイス管理・設定（API 仕様書 6 章） ----------
+
+/** GET /devices の 1 件 */
+export const deviceSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  lastSeenAt: z.iso.datetime().nullable(),
+  /** 有効なデバイストークンがあるか */
+  active: z.boolean(),
+  createdAt: z.iso.datetime(),
+});
+export type Device = z.infer<typeof deviceSchema>;
+export const deviceListSchema = z.object({ items: z.array(deviceSchema) });
+
+/** GET・PUT /devices/{deviceId}/settings のレスポンス */
+export const deviceSettingsDetailSchema = deviceSettingsSchema.extend({
+  updatedAt: z.iso.datetime(),
+});
+export type DeviceSettingsDetail = z.infer<typeof deviceSettingsDetailSchema>;

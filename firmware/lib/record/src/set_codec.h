@@ -27,6 +27,11 @@ struct StoredSetHeader {
     uint64_t endedUptimeMs = 0;
     int64_t startedEpochMs = 0;    // 実時刻（UNIX 時刻のミリ秒）。NTP 前に記録したなら 0（不明）
     SetSettings settings{};
+    /**
+     * 記録したときのデバイストークンの指紋（tokenFingerprint）。ペアリングしていなかったなら 0。
+     * ペアリングし直した後に、前の持ち主の記録を新しい持ち主へ送らないために使う
+     */
+    uint32_t ownerFingerprint = 0;
 };
 
 /** 16 バイトの乱数から UUID v4 の文字列を作る（版と変種のビットはここで立てる） */
@@ -38,10 +43,13 @@ std::string formatIso8601Utc(int64_t epochMs);
 /** reps の JSON 配列を作る。速度カーブで budget を超えそうなレップは、カーブを null にする */
 std::string encodeRepsJson(const SetRecord& set, size_t budget = kRepsJsonBudget);
 
-/** 保存ファイルの 1 行目（改行なし） */
+/** 保存ファイルの 1 行目（改行なし）。形式は PCS2（末尾に ownerFingerprint） */
 std::string encodeHeader(const StoredSetHeader& h);
 
-/** 1 行目を読む。形が違えば false */
+/**
+ * 1 行目を読む。形が違えば false。
+ * ペアリングを入れる前の形式（PCS1）も読み、そのときの ownerFingerprint は 0（不明）にする
+ */
 bool decodeHeader(const std::string& line, StoredSetHeader& out);
 
 /** API に送る本文を作る。startedEpochMs は送る直前に確定した実時刻 */

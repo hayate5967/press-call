@@ -15,6 +15,10 @@ SendOutcome classifyResponse(int status, const std::string& body) {
     return SendOutcome::Retry;
 }
 
+bool belongsToCurrentOwner(uint32_t recordFingerprint, uint32_t currentFingerprint) {
+    return recordFingerprint == 0 || recordFingerprint == currentFingerprint;
+}
+
 uint32_t retryDelayMs(uint32_t failures) {
     constexpr uint32_t kBaseMs = 5000;
     constexpr uint32_t kMaxMs = 5 * 60 * 1000;
