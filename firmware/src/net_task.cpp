@@ -407,6 +407,9 @@ void netTask(void*) {
             wasConnected = connected;
             Serial.println(connected ? "# NET tethering connected" : "# NET tethering lost");
             if (connected) {
+                // bench.local が引けないときに IP で直接開けるように出す（IP は秘密ではない）
+                Serial.printf("# NET ip %s (http://%s)\n", WiFi.localIP().toString().c_str(),
+                              WiFi.localIP().toString().c_str());
                 bench::begin();  // http://bench.local（つながってから始める）
                 // つながったらすぐ再送・設定の問い合わせ・ペアリングを試す
                 gNextAttemptMs = millis();
