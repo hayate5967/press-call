@@ -17,7 +17,9 @@
   },
   "observability": {
     "enabled": true
-  }
-  // DB を使い始めたら Hyperdrive の設定を追加する：
-  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<wrangler hyperdrive create で発行された ID>" }]
+  },
+  // Neon の production ブランチへの接続プール。接続文字列は Hyperdrive の設定の中にあり、ID は秘密ではない。
+  // キャッシュは無効（保存直後の設定やトークンの状態を古い値で返さないため）。
+  // 手元の wrangler dev では、.dev.vars の DATABASE_URL（開発用ブランチ）を使う
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "d6f683940de44d59b909637bafcee24b" }]
 }

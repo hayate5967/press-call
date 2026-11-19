@@ -180,8 +180,8 @@ sequenceDiagram
 | 項目 | 手元（Mac Studio） | 本番 |
 | --- | --- | --- |
 | API・Web アプリ | `wrangler dev`（Workers を手元で再現）、`vite dev` | Cloudflare Workers（`wrangler deploy`） |
-| DB | Neon の開発用ブランチ（本番 DB のコピー） | Neon の main ブランチ |
-| マイグレーション | `drizzle-kit migrate` を開発ブランチへ | デプロイ前に同じコマンドを本番へ |
+| DB | Neon の開発用ブランチ `dev`（本番 DB のコピー）。`pnpm dev` が `.dev.vars` の `DATABASE_URL` を Hyperdrive の代わりに渡す | Neon の `production` ブランチ（Hyperdrive 経由、キャッシュ無効） |
+| マイグレーション | `drizzle-kit migrate` を開発ブランチへ | デプロイ前に同じコマンドを本番へ（接続文字列はその場で入力し、ファイルに保存しない） |
 | Google OAuth | 開発用の戻り先 URL（localhost）を登録 | 本番の戻り先 URL を登録 |
 | ESP32 | USB で書き込み、接続先を手元の API に切り替えられるようにする | 本番の API |
 
