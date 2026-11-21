@@ -58,7 +58,7 @@ export function SettingsTabPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium">{d.name}</span>
-                      {!d.active && <Badge variant="outline">無効</Badge>}
+                      {!d.active && <Badge variant="outline">使えない</Badge>}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       最終通信：{d.lastSeenAt ? formatDateTime(d.lastSeenAt) : "まだありません"}

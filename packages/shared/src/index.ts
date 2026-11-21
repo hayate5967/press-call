@@ -278,6 +278,10 @@ export const deviceSchema = z.object({
 export type Device = z.infer<typeof deviceSchema>;
 export const deviceListSchema = z.object({ items: z.array(deviceSchema) });
 
+/** PATCH /devices/{deviceId} のリクエスト（名前は前後の空白を落として 1〜50 文字） */
+export const renameDeviceInputSchema = z.object({ name: deviceNameSchema });
+export type RenameDeviceInput = z.infer<typeof renameDeviceInputSchema>;
+
 /** GET・PUT /devices/{deviceId}/settings のレスポンス */
 export const deviceSettingsDetailSchema = deviceSettingsSchema.extend({
   updatedAt: z.iso.datetime(),

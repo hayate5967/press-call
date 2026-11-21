@@ -1,10 +1,13 @@
-// デバイスの設定画面（/devices/{id}/settings）。API 仕様書 6 章
-// 保存は If-Match に読み込んだときの version を付け、別の画面での変更を上書きしない
+// デバイスの画面（/devices/{id}/settings）。API 仕様書 6 章
+// - いちばん上：名前（変更できる）と状態（FR-A04）
+// - 設定（FR-V06）：保存は If-Match に読み込んだときの version を付け、別の画面での変更を上書きしない
+// - いちばん下：盗難・紛失時に使えなくする（失効、FR-A04）
 import type { DeviceSettingsDetail } from "@press-call/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { CircleCheck } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
+import { DeviceInfoCard, RevokeDeviceCard } from "@/components/device-manager";
 import { ErrorAlert, Loading, Page } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -15,7 +18,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ApiProblem, api } from "../api/client";
 import { formatDateTime } from "../format";
 import { errorMessage } from "../messages";
-import { deviceSettingsQuery, queryKeys } from "../queries";
+import { deviceSettingsQuery, devicesQuery, queryKeys } from "../queries";
 import { fromForm, type SettingsForm, toForm } from "../settings-form";
 
 const route = getRouteApi("/auth/devices/$deviceId/settings");
@@ -23,10 +26,13 @@ const route = getRouteApi("/auth/devices/$deviceId/settings");
 export function SettingsPage() {
   const { deviceId } = route.useParams();
   const settings = useQuery(deviceSettingsQuery(deviceId));
+  const devices = useQuery(devicesQuery);
+  const device = devices.data?.find((d) => d.id === deviceId);
   const [saved, setSaved] = useState(false);
 
   return (
-    <Page title="デバイスの設定" back="/settings">
+    <Page title={device?.name ?? "デバイス"} back="/settings">
+      {device && <DeviceInfoCard device={device} />}
       {settings.isPending && <Loading />}
       <ErrorAlert message={settings.error ? errorMessage(settings.error) : null} />
       {settings.data && (
@@ -39,6 +45,7 @@ export function SettingsPage() {
           onSaved={setSaved}
         />
       )}
+      {device && <RevokeDeviceCard device={device} />}
     </Page>
   );
 }
@@ -94,6 +101,7 @@ function SettingsEditor(props: {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      <h2 className="px-1 pt-2 text-sm font-semibold text-muted-foreground">合図の設定</h2>
       <Card>
         <CardHeader>
           <CardTitle>モード</CardTitle>

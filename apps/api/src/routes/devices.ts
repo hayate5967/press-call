@@ -3,15 +3,17 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   deviceListSchema,
+  deviceSchema,
   deviceSettingsDetailSchema,
   deviceSettingsInputSchema,
+  renameDeviceInputSchema,
 } from "@press-call/shared";
 import type { AppEnv } from "../env";
 import { userAuth } from "../middleware/auth-user";
 import { ApiError, problemResponse, validationHook } from "../middleware/error";
 import { listDevices } from "../repositories/devices";
 import { getDeviceSettingsDetail, putDeviceSettings } from "../services/device-settings";
-import { assertOwnedDevice } from "../services/devices";
+import { assertOwnedDevice, renameDevice, revokeDevice, toDevice } from "../services/devices";
 import { settingsEtag } from "./device";
 
 const deviceIdParams = z.object({
@@ -34,6 +36,47 @@ const listRoute = createRoute({
       content: { "application/json": { schema: deviceListSchema } },
     },
     401: unauthorized,
+  },
+});
+
+const renameRoute = createRoute({
+  method: "patch",
+  path: "/devices/{deviceId}",
+  tags: ["デバイス管理"],
+  summary: "デバイス名の変更",
+  middleware: [userAuth] as const,
+  request: {
+    params: deviceIdParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: renameDeviceInputSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "変更後のデバイス",
+      content: { "application/json": { schema: deviceSchema } },
+    },
+    401: unauthorized,
+    404: problemResponse("デバイスがない、または他人のデバイス（not_found）"),
+    422: problemResponse("名前が空・50 文字を超える（validation_failed）"),
+  },
+});
+
+const revokeRoute = createRoute({
+  method: "post",
+  path: "/devices/{deviceId}/revoke",
+  tags: ["デバイス管理"],
+  summary: "デバイストークンを失効（盗難・紛失時）",
+  description:
+    "そのデバイスのトークンをすべて失効させる。以降 ESP32 は 401 device_token_revoked を受け取る。" +
+    "記録は消えない。再び使うにはペアリングし直す。失効済みでも 204",
+  middleware: [userAuth] as const,
+  request: { params: deviceIdParams },
+  responses: {
+    204: { description: "失効させた" },
+    401: unauthorized,
+    404: problemResponse("デバイスがない、または他人のデバイス（not_found）"),
   },
 });
 
@@ -104,16 +147,17 @@ export function parseIfMatch(header: string | undefined): number[] | undefined {
 export const devicesRoutes = new OpenAPIHono<AppEnv>({ defaultHook: validationHook })
   .openapi(listRoute, async (c) => {
     const items = await listDevices(c.var.db, c.var.user.userId);
-    return c.json(
-      {
-        items: items.map((d) => ({
-          ...d,
-          lastSeenAt: d.lastSeenAt?.toISOString() ?? null,
-          createdAt: d.createdAt.toISOString(),
-        })),
-      },
-      200,
-    );
+    return c.json({ items: items.map(toDevice) }, 200);
+  })
+  .openapi(renameRoute, async (c) => {
+    const { deviceId } = c.req.valid("param");
+    const { name } = c.req.valid("json");
+    return c.json(await renameDevice(c.var.db, c.var.user.userId, deviceId, name), 200);
+  })
+  .openapi(revokeRoute, async (c) => {
+    const { deviceId } = c.req.valid("param");
+    await revokeDevice(c.var.db, c.var.user.userId, deviceId);
+    return c.body(null, 204);
   })
   .openapi(getSettingsRoute, async (c) => {
     const { deviceId } = c.req.valid("param");
