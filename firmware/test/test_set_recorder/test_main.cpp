@@ -175,6 +175,165 @@ void test_stuck_mid_rep_ends_set_without_partial_rep() {
     TEST_ASSERT_EQUAL(1, lastFinished.reps.size());
 }
 
+
+// ---- ボタンで区切る（ADR-0011） ----
+
+void collect(SetRecorder& r) {
+    while (r.hasFinished()) {
+        ++finishedCount;
+        lastFinished = r.takeFinished();
+    }
+}
+
+void test_manual_set_uses_press_times() {
+    PauseDetector d;
+    SetRecorder r;
+    r.setManualAvailable(true);
+    oneRep(d, r);  // 開始を押す前のレップ（入らない）
+    feed(d, r, 0.0f, 20000);
+    TEST_ASSERT_FALSE(r.inSet());  // つながっているあいだは、動きでセットを始めない
+    TEST_ASSERT_EQUAL(0, finishedCount);
+
+    const uint64_t pressedStart = t;
+    TEST_ASSERT_FALSE(r.startManual(t, pressedStart));
+    TEST_ASSERT_TRUE(r.inManualSet());
+    feed(d, r, 0.0f, 2000);
+    oneRep(d, r);
+    oneRep(d, r);
+    feed(d, r, 0.0f, 20000);  // 15 秒動かなくても、ボタンで始めたセットは終わらない
+    TEST_ASSERT_TRUE(r.inManualSet());
+
+    const uint64_t pressedStop = t;
+    TEST_ASSERT_TRUE(r.stopManual(t, pressedStop));
+    collect(r);
+    TEST_ASSERT_EQUAL(1, finishedCount);
+    TEST_ASSERT_EQUAL(2, lastFinished.reps.size());
+    TEST_ASSERT_EQUAL_UINT64(pressedStart, lastFinished.startedUptimeMs);
+    TEST_ASSERT_EQUAL_UINT64(pressedStop, lastFinished.endedUptimeMs);
+    // 1 レップ目は開始を押してから 2 秒後（＋1 サンプル）に下降を始めた
+    TEST_ASSERT_UINT32_WITHIN(20, 2000, lastFinished.reps[0].startOffsetMs);
+    TEST_ASSERT_FALSE(r.takeAutoStopped());
+}
+
+void test_manual_start_backfills_reps_after_press_time() {
+    PauseDetector d;
+    SetRecorder r;
+    r.setManualAvailable(true);
+    oneRep(d, r);  // 押す前
+    feed(d, r, 0.0f, 1000);
+    const uint64_t pressed = t;  // ここで押したが、指示が届くのは 2 レップ後
+    oneRep(d, r);
+    oneRep(d, r);
+    r.startManual(t, pressed);
+    oneRep(d, r);
+    r.stopManual(t, t);
+    collect(r);
+    TEST_ASSERT_EQUAL(1, finishedCount);
+    TEST_ASSERT_EQUAL(3, lastFinished.reps.size());
+    TEST_ASSERT_EQUAL_UINT64(pressed, lastFinished.startedUptimeMs);
+    TEST_ASSERT_TRUE(lastFinished.reps[0].startOffsetMs < lastFinished.reps[1].startOffsetMs);
+    TEST_ASSERT_TRUE(lastFinished.reps[1].startOffsetMs < lastFinished.reps[2].startOffsetMs);
+}
+
+void test_manual_backfill_forgets_reps_older_than_buffer() {
+    PauseDetector d;
+    SetRecorder r;
+    r.setManualAvailable(true);
+    const uint64_t pressedLongAgo = t;
+    oneRep(d, r);            // 押した後だが、届くまで 40 秒かかった（ためておくのは 30 秒）
+    feed(d, r, 0.0f, 40000);
+    oneRep(d, r);            // これはまだためてある
+    r.startManual(t, pressedLongAgo);
+    r.stopManual(t, t);
+    collect(r);
+    TEST_ASSERT_EQUAL(1, finishedCount);
+    TEST_ASSERT_EQUAL(1, lastFinished.reps.size());
+}
+
+void test_manual_stop_drops_reps_after_press_time() {
+    PauseDetector d;
+    SetRecorder r;
+    r.setManualAvailable(true);
+    r.startManual(t, t);
+    oneRep(d, r);
+    feed(d, r, 0.0f, 500);
+    const uint64_t pressedStop = t;
+    oneRep(d, r);  // 終了を押した後、指示が届く前に挙げた
+    r.stopManual(t, pressedStop);
+    collect(r);
+    TEST_ASSERT_EQUAL(1, lastFinished.reps.size());
+    TEST_ASSERT_EQUAL_UINT64(pressedStop, lastFinished.endedUptimeMs);
+}
+
+void test_manual_set_without_reps_is_dropped() {
+    PauseDetector d;
+    SetRecorder r;
+    r.setManualAvailable(true);
+    r.startManual(t, t);
+    feed(d, r, 0.0f, 3000);
+    TEST_ASSERT_FALSE(r.stopManual(t, t));
+    collect(r);
+    TEST_ASSERT_EQUAL(0, finishedCount);
+    TEST_ASSERT_FALSE(r.inSet());
+}
+
+void test_manual_set_ends_itself_after_idle() {
+    PauseDetector d;
+    RecorderConfig c;
+    c.manualIdleMs = 60000;  // テストを短くするため 1 分にする
+    SetRecorder r{c};
+    r.setManualAvailable(true);
+    r.startManual(t, t);
+    oneRep(d, r);
+    feed(d, r, 0.0f, 59000);
+    TEST_ASSERT_TRUE(r.inManualSet());
+    feed(d, r, 0.0f, 2000);
+    TEST_ASSERT_FALSE(r.inSet());
+    TEST_ASSERT_EQUAL(1, finishedCount);
+    TEST_ASSERT_EQUAL(1, lastFinished.reps.size());
+    TEST_ASSERT_TRUE(r.takeAutoStopped());
+    TEST_ASSERT_FALSE(r.takeAutoStopped());  // 1 回だけ
+    // 自分で終えた後に届いた「終了」では何もしない
+    TEST_ASSERT_FALSE(r.stopManual(t, t));
+}
+
+void test_manual_start_during_auto_set_splits_reps() {
+    PauseDetector d;
+    SetRecorder r;
+    oneRep(d, r);  // つながっていないので、動きでセットが始まる
+    TEST_ASSERT_TRUE(r.inSet());
+    TEST_ASSERT_FALSE(r.inManualSet());
+    feed(d, r, 0.0f, 1000);
+    const uint64_t pressed = t;
+    oneRep(d, r);  // 押した後のレップ（新しいセットに移る）
+    r.setManualAvailable(true);
+    TEST_ASSERT_TRUE(r.startManual(t, pressed));  // 動きで始めたセットは閉じる
+    collect(r);
+    TEST_ASSERT_EQUAL(1, finishedCount);
+    TEST_ASSERT_EQUAL(1, lastFinished.reps.size());
+    TEST_ASSERT_TRUE(r.inManualSet());
+    TEST_ASSERT_EQUAL(1, r.repCount());
+    r.stopManual(t, t);
+    collect(r);
+    TEST_ASSERT_EQUAL(2, finishedCount);
+    TEST_ASSERT_EQUAL_UINT64(pressed, lastFinished.startedUptimeMs);
+}
+
+void test_manual_set_keeps_going_when_connection_is_lost() {
+    PauseDetector d;
+    SetRecorder r;
+    r.setManualAvailable(true);
+    r.startManual(t, t);
+    oneRep(d, r);
+    r.setManualAvailable(false);  // 途中でつながらなくなった
+    feed(d, r, 0.0f, 20000);      // 15 秒動かなくても、ボタンで始めたセットのまま
+    TEST_ASSERT_TRUE(r.inManualSet());
+    oneRep(d, r);
+    r.stopManual(t, t);
+    collect(r);
+    TEST_ASSERT_EQUAL(2, lastFinished.reps.size());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_set_ends_after_idle_and_keeps_reps);
@@ -184,5 +343,13 @@ int main() {
     RUN_TEST(test_set_finishes_at_max_reps);
     RUN_TEST(test_long_ascent_curve_is_decimated);
     RUN_TEST(test_stuck_mid_rep_ends_set_without_partial_rep);
+    RUN_TEST(test_manual_set_uses_press_times);
+    RUN_TEST(test_manual_start_backfills_reps_after_press_time);
+    RUN_TEST(test_manual_backfill_forgets_reps_older_than_buffer);
+    RUN_TEST(test_manual_stop_drops_reps_after_press_time);
+    RUN_TEST(test_manual_set_without_reps_is_dropped);
+    RUN_TEST(test_manual_set_ends_itself_after_idle);
+    RUN_TEST(test_manual_start_during_auto_set_splits_reps);
+    RUN_TEST(test_manual_set_keeps_going_when_connection_is_lost);
     return UNITY_END();
 }
