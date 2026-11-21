@@ -6,15 +6,15 @@ import type { DeviceSettingsDetail } from "@press-call/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { CircleCheck } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { DeviceInfoCard, RevokeDeviceCard } from "@/components/device-manager";
 import { ErrorAlert, Loading, Page } from "@/components/layout";
+import { SignalSettingsFields } from "@/components/signal-settings-fields";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ApiProblem, api } from "../api/client";
 import { formatDateTime } from "../format";
 import { errorMessage } from "../messages";
@@ -102,75 +102,12 @@ function SettingsEditor(props: {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <h2 className="px-1 pt-2 text-sm font-semibold text-muted-foreground">合図の設定</h2>
+      {/* 今日タブのシートと同じ入力欄（signal-settings-fields.tsx） */}
       <Card>
-        <CardHeader>
-          <CardTitle>モード</CardTitle>
-        </CardHeader>
         <CardContent>
-          <RadioGroup
-            className="gap-1"
-            value={form.mode}
-            onValueChange={(mode) => set({ mode: mode as SettingsForm["mode"] })}
-          >
-            <Choice value="auto_signal" id="mode-auto">
-              自動合図（胸の上で止まったら「Press」）
-            </Choice>
-            <Choice value="count_only" id="mode-count">
-              回数記録だけ（合図なし）
-            </Choice>
-          </RadioGroup>
+          <SignalSettingsFields idPrefix="device" form={form} errors={fieldErrors} onChange={set} />
         </CardContent>
       </Card>
-
-      {form.mode === "auto_signal" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>静止してから合図までの時間</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <RadioGroup
-              className="gap-1"
-              value={form.pauseMode}
-              onValueChange={(pauseMode) =>
-                set({ pauseMode: pauseMode as SettingsForm["pauseMode"] })
-              }
-            >
-              <Choice value="fixed" id="pause-fixed">
-                固定
-              </Choice>
-              <Choice value="random" id="pause-random">
-                ランダム（試合の合図に慣れる練習）
-              </Choice>
-            </RadioGroup>
-            {form.pauseMode === "fixed" ? (
-              <SecondsInput
-                id="fixed-sec"
-                label="秒"
-                value={form.fixedSec}
-                error={fieldErrors.fixedSec}
-                onChange={(fixedSec) => set({ fixedSec })}
-              />
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <SecondsInput
-                  id="min-sec"
-                  label="最短（秒）"
-                  value={form.minSec}
-                  error={fieldErrors.minSec}
-                  onChange={(minSec) => set({ minSec })}
-                />
-                <SecondsInput
-                  id="max-sec"
-                  label="最長（秒）"
-                  value={form.maxSec}
-                  error={fieldErrors.maxSec}
-                  onChange={(maxSec) => set({ maxSec })}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
@@ -208,41 +145,6 @@ function SettingsEditor(props: {
         version {loaded.version}・更新 {formatDateTime(loaded.updatedAt)}
       </p>
     </form>
-  );
-}
-
-function Choice(props: { value: string; id: string; children: ReactNode }) {
-  // 丸だけでなく文字を含めた行全体（高さ 44px 以上）を押せるようにする
-  return (
-    <Label
-      htmlFor={props.id}
-      className="flex min-h-11 items-center gap-3 text-base leading-snug font-normal"
-    >
-      <RadioGroupItem value={props.value} id={props.id} />
-      {props.children}
-    </Label>
-  );
-}
-
-function SecondsInput(props: {
-  id: string;
-  label: string;
-  value: string;
-  error: string | undefined;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={props.id}>{props.label}</Label>
-      <Input
-        id={props.id}
-        inputMode="decimal"
-        value={props.value}
-        onChange={(e) => props.onChange(e.target.value)}
-        aria-invalid={props.error ? true : undefined}
-      />
-      <FieldError message={props.error} />
-    </div>
   );
 }
 
