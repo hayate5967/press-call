@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { Activity, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EmptyState, ErrorAlert, Loading, Page } from "@/components/layout";
+import { RecordingControl } from "@/components/recording-control";
 import { SessionSets } from "@/components/session-sets";
 import { Button } from "@/components/ui/button";
 import { useLiveSets } from "@/lib/live-sets";
@@ -38,7 +39,7 @@ export function TodayPage() {
       {latest.isSuccess && todaysId === null && (
         <EmptyState icon={Activity} title="今日はまだセットがありません">
           <p>
-            デバイスの電源を入れてセットを始めると、ここに記録が出ます。つなぎ方は
+            デバイスの電源を入れ、下の「セット開始」を押してからセットを始めると、ここに記録が出ます。つなぎ方は
             <Link to="/settings" className="font-semibold text-primary">
               設定
             </Link>
@@ -49,6 +50,9 @@ export function TodayPage() {
       {session.data && (
         <SessionSets session={session.data} highlightIds={highlightIds} newestFirst />
       )}
+      {/* 下に固定した開始・終了ボタンに、最後の内容が隠れないよう空けておく */}
+      <div aria-hidden className="h-48" />
+      <RecordingControl />
     </Page>
   );
 }

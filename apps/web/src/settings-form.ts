@@ -84,3 +84,20 @@ function messageFor(field: keyof SettingsForm): string {
       return "入力を確認してください";
   }
 }
+
+/** 合図の設定を 1 行で（「自動合図・固定 1.0 秒」「自動合図・ランダム 0.5〜1.5 秒」「回数記録（合図なし）」） */
+export function settingsSummary(s: Pick<DeviceSettings, "mode" | "pause">): string {
+  if (s.mode === "count_only" || s.pause === null) return "回数記録（合図なし）";
+  const sec = (ms: number) => (ms / 1000).toFixed(1);
+  return s.pause.mode === "fixed"
+    ? `自動合図・固定 ${sec(s.pause.fixedMs)} 秒`
+    : `自動合図・ランダム ${sec(s.pause.minMs)}〜${sec(s.pause.maxMs)} 秒`;
+}
+
+/** 秒の入力欄を「− / ＋」で動かす（0.2〜5 秒の範囲に収め、小数 1 桁にそろえる）。数でなければ 1 秒から */
+export function stepSeconds(value: string, delta: number): string {
+  const current = Number(value);
+  const base = value.trim() === "" || Number.isNaN(current) ? 1 : current;
+  const next = Math.min(5, Math.max(0.2, Math.round((base + delta) * 10) / 10));
+  return next.toFixed(1);
+}

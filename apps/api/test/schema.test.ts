@@ -84,12 +84,13 @@ async function createSet(overrides: Partial<typeof schema.sets.$inferInsert> = {
 // ---------- テスト ----------
 
 describe("マイグレーション", () => {
-  it("11 テーブルが作られる", async () => {
+  it("12 テーブルが作られる", async () => {
     const result = await client.query<{ table_name: string }>(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
     );
     expect(result.rows.map((r) => r.table_name)).toEqual([
       "device_authorizations",
+      "device_recordings",
       "device_settings",
       "device_tokens",
       "devices",

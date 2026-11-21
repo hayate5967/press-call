@@ -3,6 +3,7 @@ import type {
   Device,
   DeviceSettingsDetail,
   Me,
+  RecordingState,
   SessionDetail,
   SessionList,
   SetDetail,
@@ -20,6 +21,7 @@ export const queryKeys = {
   session: (sessionId: string) => ["sessions", "detail", sessionId] as const,
   set: (setId: string) => ["sets", setId] as const,
   newSets: ["sets", "new"] as const,
+  recording: (deviceId: string) => ["devices", deviceId, "recording"] as const,
 };
 
 /** ログイン中のユーザー。取れなければ AuthRequiredError（ログインしていない） */
@@ -76,4 +78,11 @@ export const setDetailQuery = (setId: string) =>
   queryOptions({
     queryKey: queryKeys.set(setId),
     queryFn: async () => (await api.json<SetDetail>(`/sets/${setId}`)).data,
+  });
+
+/** セットの開始・終了の状態（記録中か・デバイスに伝わったか） */
+export const recordingQuery = (deviceId: string) =>
+  queryOptions({
+    queryKey: queryKeys.recording(deviceId),
+    queryFn: async () => (await api.json<RecordingState>(`/devices/${deviceId}/recording`)).data,
   });

@@ -207,6 +207,30 @@ export const deviceSettings = pgTable(
   ],
 );
 
+/**
+ * セットの開始・終了の指示（ADR-0011）。Web アプリのボタンで書き換え、ESP32 が 5 秒おきに取りに来る。
+ * 1 デバイス 1 行。最初にボタンを押したときに作る（行がなければ「停止中・番号 0」）
+ */
+export const deviceRecordings = pgTable(
+  "device_recordings",
+  {
+    deviceId: uuid("device_id")
+      .primaryKey()
+      .references(() => devices.id),
+    recording: boolean("recording").notNull(),
+    /** 開始・終了のボタンを押すたびに +1。ESP32 は番号が変われば新しい指示とみなす */
+    seq: integer("seq").notNull(),
+    /** 最後に開始を押した時刻。ESP32 はこれより後に始まったレップをセットに入れる */
+    startedAt: timestamptz("started_at"),
+    /** 最後に終了した時刻（ボタン、または ESP32 が自分で終えた） */
+    stoppedAt: timestamptz("stopped_at"),
+    /** ESP32 が受け取った番号（画面で「伝わったか」を出す） */
+    ackedSeq: integer("acked_seq").notNull().default(0),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (t) => [check("device_recordings_seq_check", sql`${t.seq} >= 0 AND ${t.ackedSeq} >= 0`)],
+);
+
 // ---------- 記録まわり ----------
 
 /** 練習日。同じ日（日本時間）のセットは 1 つにまとまる */

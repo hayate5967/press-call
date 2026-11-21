@@ -4,7 +4,7 @@ Nov 15, 2026 · @Kato Hayate
 
 ## 1. ER図
 
-テーブルは 11 個。認証まわり（6 個）、デバイスの設定（1 個）、記録まわり（4 個）に分かれ、どちらも users にぶら下がる。記録は「練習日（training\_sessions）→ セット → レップ」の 3 段で、重い生データだけ別テーブルに分けている。
+テーブルは 12 個。認証まわり（6 個）、デバイスの設定と記録の指示（2 個）、記録まわり（4 個）に分かれ、どちらも users にぶら下がる。記録は「練習日（training\_sessions）→ セット → レップ」の 3 段で、重い生データだけ別テーブルに分けている。
 
 ```mermaid
 erDiagram
@@ -18,6 +18,7 @@ erDiagram
   sets ||--o{ reps : "含む"
   sets ||--o| set_raw_data : "生データ"
   devices ||--|| device_settings : "設定"
+  devices ||--o| device_recordings : "記録の指示"
   users |o--o{ device_authorizations : "許可する"
   device_authorizations }o--o| devices : "作られたデバイス"
 
@@ -80,6 +81,15 @@ erDiagram
     int pause_max_ms
     real still_threshold
     int version
+    timestamptz updated_at
+  }
+  device_recordings {
+    uuid device_id PK
+    boolean recording
+    int seq
+    timestamptz started_at
+    timestamptz stopped_at
+    int acked_seq
     timestamptz updated_at
   }
   training_sessions {
@@ -213,6 +223,22 @@ Web アプリで変更し、ESP32 が数秒おきに取りに来る設定。1 �
 | still\_threshold | real |  | 静止とみなす揺れの大きさ。空ならファームの既定値 |
 | version | int | NOT NULL、更新のたびに +1 | ESP32 が「手元の設定が最新か」を軽く確かめるための番号 |
 | updated\_at | timestamptz | NOT NULL | 最後に変更した日時 |
+
+### device\_recordings（記録の指示）
+
+セットの開始・終了の指示（ADR-0011）。Web アプリのボタンで書き換え、ESP32 が 5 秒おきに取りに来る。1 デバイスに 1 行で、最初にボタンを押したときに作る（行がなければ「停止中・番号 0」として扱う）。
+
+| 列 | 型 | 制約 | 説明 |
+| --- | --- | --- | --- |
+| device\_id | uuid | PK かつ FK → devices | どのデバイスへの指示か |
+| recording | boolean | NOT NULL | 記録中か |
+| seq | int | NOT NULL、0 以上 | 開始・終了のボタンを押すたびに +1。ESP32 は前回と番号が違えば「新しい指示」とみなす |
+| started\_at | timestamptz |  | 最後に開始を押した時刻（DB の時計）。ESP32 はこれより後に始まったレップをセットに入れる |
+| stopped\_at | timestamptz |  | 最後に終了した時刻（終了ボタン、または ESP32 が自分で終えた時刻）。これより後のレップはセットに入れない |
+| acked\_seq | int | NOT NULL、0 以上 | ESP32 が受け取った番号。画面で「デバイスに伝わったか」を出すのに使う |
+| updated\_at | timestamptz | NOT NULL | 最後に変わった日時 |
+
+device\_settings と分けたのは、こちらは練習中に何度も書き換わり、設定の version（変わったときだけ ESP32 が取り直す）とは変わる頻度が違うため。
 
 ## 3. テーブル定義：記録まわり
 

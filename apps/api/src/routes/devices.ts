@@ -6,12 +6,15 @@ import {
   deviceSchema,
   deviceSettingsDetailSchema,
   deviceSettingsInputSchema,
+  recordingStateSchema,
   renameDeviceInputSchema,
+  setRecordingInputSchema,
 } from "@press-call/shared";
 import type { AppEnv } from "../env";
 import { userAuth } from "../middleware/auth-user";
 import { ApiError, problemResponse, validationHook } from "../middleware/error";
 import { listDevices } from "../repositories/devices";
+import { getRecordingState, setRecording } from "../services/device-recordings";
 import { getDeviceSettingsDetail, putDeviceSettings } from "../services/device-settings";
 import { assertOwnedDevice, renameDevice, revokeDevice, toDevice } from "../services/devices";
 import { settingsEtag } from "./device";
@@ -77,6 +80,50 @@ const revokeRoute = createRoute({
     204: { description: "失効させた" },
     401: unauthorized,
     404: problemResponse("デバイスがない、または他人のデバイス（not_found）"),
+  },
+});
+
+const getRecordingRoute = createRoute({
+  method: "get",
+  path: "/devices/{deviceId}/recording",
+  tags: ["記録の指示"],
+  summary: "記録の状態（記録中か・デバイスに伝わったか）",
+  middleware: [userAuth] as const,
+  request: { params: deviceIdParams },
+  responses: {
+    200: {
+      description: "ackedSeq が seq と同じなら、デバイスに伝わっている",
+      content: { "application/json": { schema: recordingStateSchema } },
+    },
+    401: unauthorized,
+    404: problemResponse("デバイスがない、または他人のデバイス（not_found）"),
+  },
+});
+
+const putRecordingRoute = createRoute({
+  method: "put",
+  path: "/devices/{deviceId}/recording",
+  tags: ["記録の指示"],
+  summary: "セットの開始・終了",
+  description:
+    "ADR-0011。今と違う状態を送ると seq を 1 増やし、開始なら startedAt、終了なら stoppedAt に今の時刻を入れる。" +
+    "今と同じ状態なら何も変えない（二度押し・再送で番号が進まない）。デバイスは 5 秒おきに取りに来る",
+  middleware: [userAuth] as const,
+  request: {
+    params: deviceIdParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: setRecordingInputSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "変更後の状態",
+      content: { "application/json": { schema: recordingStateSchema } },
+    },
+    401: unauthorized,
+    404: problemResponse("デバイスがない、または他人のデバイス（not_found）"),
+    422: problemResponse("recording が真偽値でない（validation_failed）"),
   },
 });
 
@@ -153,6 +200,16 @@ export const devicesRoutes = new OpenAPIHono<AppEnv>({ defaultHook: validationHo
     const { deviceId } = c.req.valid("param");
     const { name } = c.req.valid("json");
     return c.json(await renameDevice(c.var.db, c.var.user.userId, deviceId, name), 200);
+  })
+  .openapi(getRecordingRoute, async (c) => {
+    const { deviceId } = c.req.valid("param");
+    c.header("Cache-Control", "no-store");
+    return c.json(await getRecordingState(c.var.db, c.var.user.userId, deviceId), 200);
+  })
+  .openapi(putRecordingRoute, async (c) => {
+    const { deviceId } = c.req.valid("param");
+    const { recording } = c.req.valid("json");
+    return c.json(await setRecording(c.var.db, c.var.user.userId, deviceId, recording), 200);
   })
   .openapi(revokeRoute, async (c) => {
     const { deviceId } = c.req.valid("param");

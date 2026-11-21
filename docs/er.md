@@ -1,6 +1,6 @@
 # ER 図
 
-テーブルは 11 個。認証まわり（6 個）、デバイスの設定（1 個）、記録まわり（4 個）。列の詳しい説明はデータ設計のドキュメントを参照。
+テーブルは 12 個。認証まわり（6 個）、デバイスの設定と記録の指示（2 個）、記録まわり（4 個）。列の詳しい説明はデータ設計のドキュメントを参照。
 
 ```mermaid
 erDiagram
@@ -14,6 +14,7 @@ erDiagram
   sets ||--o{ reps : "含む"
   sets ||--o| set_raw_data : "生データ"
   devices ||--|| device_settings : "設定"
+  devices ||--o| device_recordings : "記録の指示"
   users |o--o{ device_authorizations : "許可する"
   device_authorizations }o--o| devices : "作られたデバイス"
 
@@ -76,6 +77,15 @@ erDiagram
     int pause_max_ms
     real still_threshold
     int version
+    timestamptz updated_at
+  }
+  device_recordings {
+    uuid device_id PK
+    boolean recording
+    int seq
+    timestamptz started_at
+    timestamptz stopped_at
+    int acked_seq
     timestamptz updated_at
   }
   training_sessions {
