@@ -161,7 +161,7 @@ export function SettingsPage(props: { deviceId: string; onError: (err: unknown) 
         <ErrorText message={error} />
         {saved && (
           <p className="ok" role="status">
-            保存しました。ベンチには次のセットの前に反映されます。
+            保存しました。デバイスには次のセットの前に反映されます。
           </p>
         )}
         <button type="submit" className="primary" disabled={busy}>

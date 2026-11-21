@@ -17,7 +17,7 @@ export function loginErrorMessage(code: string | null): string | null {
 
 const PROBLEMS: Record<string, string> = {
   user_code_not_found:
-    "コードが見つかりません。ベンチの画面（bench.local）のコードを確認してください。",
+    "コードが見つかりません。デバイスの画面（bench.local）のコードを確認してください。",
   user_code_expired:
     "コードの期限（10 分）が切れました。ESP32 を再起動すると新しいコードが出ます。",
   pairing_already_handled: "このコードはすでに許可または拒否されています。",

@@ -3,6 +3,7 @@ import type { Device, Me } from "@press-call/shared";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { ErrorText, Link, Page } from "../components";
+import { connectedDeviceLabels } from "../devices";
 import { formatDateTime } from "../format";
 import { errorMessage } from "../messages";
 
@@ -21,6 +22,8 @@ export function HomePage(props: { me: Me; onError: (err: unknown) => void; onLog
       });
   }, [onError]);
 
+  const connected = devices ? connectedDeviceLabels(devices) : [];
+
   return (
     <Page title="press-call">
       <p className="muted">
@@ -34,7 +37,7 @@ export function HomePage(props: { me: Me; onError: (err: unknown) => void; onLog
       <ErrorText message={error} />
       {devices === null && !error && <p className="muted">読み込み中…</p>}
       {devices?.length === 0 && (
-        <p>まだデバイスがありません。下の手順でベンチを追加してください。</p>
+        <p>まだデバイスがありません。下の手順でデバイスを追加してください。</p>
       )}
       {devices && devices.length > 0 && (
         <ul className="list">
@@ -53,14 +56,31 @@ export function HomePage(props: { me: Me; onError: (err: unknown) => void; onLog
         </ul>
       )}
 
-      <h2>ベンチを追加する</h2>
+      <h2>デバイスを追加する</h2>
+      {connected.length > 0 && (
+        <div className="notice">
+          <p>接続済みのデバイスがあります。このまま使うなら、追加し直す必要はありません。</p>
+          <ul>
+            {connected.map((label) => (
+              <li key={label}>{label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <ol className="steps">
-        <li>iPhone のテザリングをオンにして、ベンチの電源を入れる</li>
+        <li>iPhone のテザリングをオンにして、デバイスの電源を入れる</li>
         <li>
-          Safari で <code>http://bench.local</code> を開き、「Web アプリで許可する」を押す
+          {/* bench.local はデバイスが出すページ。この画面を残したまま別のタブで開く */}
+          <a href="http://bench.local" target="_blank" rel="noopener noreferrer">
+            http://bench.local
+          </a>{" "}
+          を開き（新しいタブで開きます）、「Web アプリで許可する」を押す
+          <div className="muted small">
+            デバイスと同じテザリングにつながっているときだけ開けます
+          </div>
         </li>
         <li>
-          または、ベンチに表示されたコードを<Link to="/devices/pair">ここで入力</Link>する
+          または、デバイスに表示されたコードを<Link to="/devices/pair">ここで入力</Link>する
         </li>
       </ol>
     </Page>

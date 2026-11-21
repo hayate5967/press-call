@@ -10,7 +10,7 @@ type Done = { kind: "approved"; deviceId: string } | { kind: "denied" };
 
 export function PairPage(props: { search: string; onError: (err: unknown) => void }) {
   const [code, setCode] = useState(() => new URLSearchParams(props.search).get("code") ?? "");
-  const [name, setName] = useState("部室のベンチ");
+  const [name, setName] = useState("部室のデバイス");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<Done | null>(null);
@@ -45,9 +45,12 @@ export function PairPage(props: { search: string; onError: (err: unknown) => voi
   if (done?.kind === "approved") {
     return (
       <Page title="許可しました" back="/">
-        <p>数秒でベンチに反映されます。ベンチの画面（bench.local）に「完了」と出たら使えます。</p>
         <p>
-          <Link to={`/devices/${done.deviceId}/settings`}>このベンチの設定を開く</Link>
+          数秒でデバイスに反映されます。bench.local
+          のタブに戻り、「ペアリング済み」と出ていれば使えます。
+        </p>
+        <p>
+          <Link to={`/devices/${done.deviceId}/settings`}>このデバイスの設定を開く</Link>
         </p>
       </Page>
     );
@@ -55,7 +58,7 @@ export function PairPage(props: { search: string; onError: (err: unknown) => voi
   if (done?.kind === "denied") {
     return (
       <Page title="拒否しました" back="/">
-        <p>このコードのベンチは登録されません。</p>
+        <p>このコードのデバイスは登録されません。</p>
       </Page>
     );
   }
@@ -66,8 +69,8 @@ export function PairPage(props: { search: string; onError: (err: unknown) => voi
   };
 
   return (
-    <Page title="ベンチを追加" back="/">
-      <p>ベンチの画面（bench.local）に出ているコードと同じか確かめてから、許可してください。</p>
+    <Page title="デバイスを追加" back="/">
+      <p>デバイスの画面（bench.local）に出ているコードと同じか確かめてから、許可してください。</p>
       <form onSubmit={onSubmit} className="form">
         <label>
           コード
@@ -82,7 +85,7 @@ export function PairPage(props: { search: string; onError: (err: unknown) => voi
           />
         </label>
         <label>
-          ベンチの名前
+          デバイスの名前
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={50} required />
         </label>
         <ErrorText message={error} />
