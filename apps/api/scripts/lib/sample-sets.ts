@@ -61,16 +61,22 @@ function sampleRep(
  * 1 日ぶんの試しのセット。
  * @param day 練習日の開始時刻（この時刻から 4 分おきにセットを置く）
  * @param count セットの数
+ * @param repCount 1 セットのレップ数（省略すると 3〜6 のどれか）
  */
-export function sampleSetsForDay(day: Date, count: number, seed: number): CreateSetInput[] {
+export function sampleSetsForDay(
+  day: Date,
+  count: number,
+  seed: number,
+  repCount?: number,
+): CreateSetInput[] {
   const rnd = random(seed);
   const sets: CreateSetInput[] = [];
   for (let s = 0; s < count; s++) {
     const mode: CreateSetInput["mode"] = s % 3 === 2 ? "count_only" : "auto_signal";
-    const repCount = 3 + Math.floor(rnd() * 4); // 3〜6 レップ
+    const draw = 3 + Math.floor(rnd() * 4); // 3〜6 レップ（乱数の並びを変えないよう、指定があっても引く）
     const reps: RepInput[] = [];
     let offset = 0;
-    for (let r = 1; r <= repCount; r++) {
+    for (let r = 1; r <= (repCount ?? draw); r++) {
       reps.push(sampleRep(r, offset, mode, r - 1 + s * 0.5, rnd));
       offset += 3500 + Math.round(rnd() * 800);
     }

@@ -3,6 +3,7 @@
 // 使い方（apps/api で実行。DATABASE_URL と ENVIRONMENT は .dev.vars から読む）：
 //   pnpm dev:seed-sets --device-id <uuid>                … 今日を含む直近 3 日に 4 セットずつ
 //   pnpm dev:seed-sets --device-id <uuid> --days 7 --sets 5
+//   pnpm dev:seed-sets --device-id <uuid> --days 1 --sets 1 --reps 10   … 今に近い時刻に 10 レップのセット
 //
 // デバイスが送るのと同じ形を作り、同じ登録処理（registerSet）で入れる。練習日は自動でまとまる。
 // 実行するたびに新しいセットが増える（clientSetId が毎回変わる）。本番の DB には使えない
@@ -16,7 +17,8 @@ import { describe, fail as failWith, openDevDb } from "./lib/dev-db";
 import { sampleSetsForDay } from "./lib/sample-sets";
 
 const USAGE = `使い方:
-  pnpm dev:seed-sets --device-id <UUID> [--days <日数>] [--sets <1日のセット数>] [--yes]`;
+  pnpm dev:seed-sets --device-id <UUID> [--days <日数>] [--sets <1日のセット数>]
+                    [--reps <1セットのレップ数>] [--yes]`;
 
 function fail(message: string, showUsage = false): never {
   failWith(message, showUsage ? USAGE : undefined);
@@ -27,6 +29,7 @@ const { values } = parseArgs({
     "device-id": { type: "string" },
     days: { type: "string", default: "3" },
     sets: { type: "string", default: "4" },
+    reps: { type: "string" },
     yes: { type: "boolean", short: "y" },
     help: { type: "boolean", short: "h" },
   },
@@ -45,6 +48,11 @@ const days = Number(values.days);
 const perDay = Number(values.sets);
 if (!Number.isInteger(days) || days < 1 || days > 60) fail("--days は 1〜60 にしてください");
 if (!Number.isInteger(perDay) || perDay < 1 || perDay > 20) fail("--sets は 1〜20 にしてください");
+const reps = values.reps === undefined ? undefined : Number(values.reps);
+// デバイスが 1 セットで送れるのは 50 レップまで（createSetInputSchema）
+if (reps !== undefined && (!Number.isInteger(reps) || reps < 1 || reps > 50)) {
+  fail("--reps は 1〜50 にしてください");
+}
 
 const conn = await openDevDb({ yes: values.yes });
 try {
@@ -56,11 +64,13 @@ try {
 
   let created = 0;
   for (let d = days - 1; d >= 0; d--) {
-    // 日本時間の 19:00 ごろから始めたことにする
+    // 日本時間の 19:00 ごろから始めたことにする。
+    // --reps を付けたときは、すでに入れたセットと時刻が重ならないよう、今日の分は今の少し前から始める
     const day = new Date();
     day.setUTCDate(day.getUTCDate() - d);
-    day.setUTCHours(10, 0, 0, 0);
-    for (const set of sampleSetsForDay(day, perDay, day.getTime() / 60_000)) {
+    if (reps !== undefined && d === 0) day.setTime(Date.now() - perDay * 4 * 60_000);
+    else day.setUTCHours(10, 0, 0, 0);
+    for (const set of sampleSetsForDay(day, perDay, Math.floor(day.getTime() / 60_000), reps)) {
       // デバイスから届くときと同じルールで確かめてから入れる
       const input = createSetInputSchema.parse(set);
       const result = await registerSet(conn.db, { deviceId, userId: device.userId }, input);
