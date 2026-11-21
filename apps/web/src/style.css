@@ -1,203 +1,148 @@
-/* スマホ（iPhone の Safari）で部室から使う前提の、最小限の見た目 */
+/* 見た目は Tailwind CSS ＋ shadcn/ui（ADR-0008）。色・文字・角丸は下の変数で決め、部品はそれを使う。
+ * 色の役割とコントラストの決まりは docs/design.md（Apple の Human Interface Guidelines を参考）
+ *
+ *   ベース（約 70%）   --background（淡い水色）と --card（白）。画面の地と、内容をまとめるカード
+ *   メイン（約 25%）   --primary（青）。押せるもの（ボタン・リンク・選択中のタブ）とグラフ
+ *   アクセント（約 5%）--highlight（オレンジ）。新しいセットなど、いちばん目を引きたい 1 か所だけ
+ *   意味の色           --success（成功）・--warning（注意）・--destructive（エラー・削除）。ほかの用途に使わない
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* OS がダークモードなら .dark を付けなくても暗くする */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+/* 「透明度を下げる」がオンの端末では、すりガラスをやめて不透明にする */
+@custom-variant reduce-transparency (@media (prefers-reduced-transparency: reduce));
+
 :root {
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --muted: #666666;
-  --line: #dddddd;
-  --accent: #1d4ed8;
-  --accent-fg: #ffffff;
-  --error: #b91c1c;
-  --ok: #15803d;
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+  --radius: 1rem;
+  --background: oklch(0.965 0.022 232);
+  --foreground: oklch(0.21 0.03 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.03 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.03 255);
+  --primary: oklch(0.53 0.2 257);
+  --primary-foreground: oklch(1 0 0);
+  /* 入力欄・控えめなボタンの塗り（iOS の「塗りつぶし」にあたる） */
+  --secondary: oklch(0.935 0.022 235);
+  --secondary-foreground: oklch(0.21 0.03 255);
+  --muted: oklch(0.935 0.022 235);
+  --muted-foreground: oklch(0.47 0.035 250);
+  /* shadcn の accent は「押したとき・ホバーの背景」。ブランドのアクセントは --highlight */
+  --accent: oklch(0.935 0.022 235);
+  --accent-foreground: oklch(0.21 0.03 255);
+  --highlight: oklch(0.72 0.17 55);
+  --highlight-foreground: oklch(0.21 0.03 255);
+  --destructive: oklch(0.56 0.21 27);
+  --success: oklch(0.52 0.14 150);
+  --warning: oklch(0.55 0.13 70);
+  --border: oklch(0.9 0.018 240);
+  --input: oklch(0.9 0.018 240);
+  --ring: oklch(0.53 0.2 257);
+  --card-shadow: 0 1px 2px oklch(0.3 0.05 250 / 0.05), 0 6px 20px -8px oklch(0.3 0.08 250 / 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #111111;
-    --fg: #eeeeee;
-    --muted: #a0a0a0;
-    --line: #333333;
-    --accent: #60a5fa;
-    --accent-fg: #0b1220;
-    --error: #f87171;
-    --ok: #4ade80;
+    --background: oklch(0.15 0.025 255);
+    --foreground: oklch(0.97 0.008 240);
+    --card: oklch(0.215 0.03 255);
+    --card-foreground: oklch(0.97 0.008 240);
+    --popover: oklch(0.215 0.03 255);
+    --popover-foreground: oklch(0.97 0.008 240);
+    --primary: oklch(0.7 0.15 250);
+    --primary-foreground: oklch(0.17 0.04 260);
+    --secondary: oklch(0.28 0.03 255);
+    --secondary-foreground: oklch(0.97 0.008 240);
+    --muted: oklch(0.28 0.03 255);
+    --muted-foreground: oklch(0.74 0.03 245);
+    --accent: oklch(0.28 0.03 255);
+    --accent-foreground: oklch(0.97 0.008 240);
+    --highlight: oklch(0.76 0.16 58);
+    --highlight-foreground: oklch(0.17 0.04 260);
+    --destructive: oklch(0.7 0.19 24);
+    --success: oklch(0.75 0.17 150);
+    --warning: oklch(0.82 0.14 80);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 12%);
+    --ring: oklch(0.7 0.15 250);
+    /* 暗い画面では影が見えないので、カードは地より明るい色で浮かせる */
+    --card-shadow: none;
   }
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  line-height: 1.6;
+/* 「コントラストを上げる」がオンの端末では、補足の文字と区切り線をはっきりさせる */
+@media (prefers-contrast: more) {
+  :root {
+    --muted-foreground: oklch(0.33 0.035 250);
+    --border: oklch(0.62 0.03 245);
+    --input: oklch(0.62 0.03 245);
+  }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root {
+    --muted-foreground: oklch(0.88 0.02 245);
+    --border: oklch(1 0 0 / 35%);
+    --input: oklch(1 0 0 / 35%);
+  }
 }
 
-.page {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 16px;
+@theme inline {
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --shadow-card: var(--card-shadow);
+  /* iPhone では San Francisco とヒラギノ角ゴ（システムフォント）になる */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+    system-ui, sans-serif;
 }
 
-h1 {
-  font-size: 1.5rem;
-  margin: 8px 0 16px;
+/* 文字の大きさは iOS の標準に合わせる（本文 17px・補足 15px・注記 12px）。
+ * 入力欄が 16px 未満だと iPhone の Safari が勝手に拡大するので、本文は 17px のまま使う */
+@theme {
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.35rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.5rem;
 }
 
-h2 {
-  font-size: 1.1rem;
-  margin: 24px 0 8px;
-}
-
-a {
-  color: var(--accent);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.small {
-  font-size: 0.85rem;
-}
-
-.error {
-  color: var(--error);
-}
-
-.ok {
-  color: var(--ok);
-}
-
-.back {
-  margin: 0;
-}
-
-.button,
-button {
-  display: inline-block;
-  font: inherit;
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--fg);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-button.link {
-  padding: 0;
-  border: none;
-  color: var(--accent);
-  text-decoration: underline;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.form label.radio {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-}
-
-fieldset {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-input:not([type="radio"]) {
-  font: inherit;
-  /* 16px 未満だと iPhone が入力時に拡大してしまう */
-  font-size: 16px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--fg);
-}
-
-input.code {
-  font-family: ui-monospace, monospace;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.row {
-  display: flex;
-  gap: 12px;
-}
-
-.row > label {
-  flex: 1;
-}
-
-.buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.badge {
-  margin-left: 8px;
-  font-size: 0.75rem;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--muted);
-  color: var(--muted);
-}
-
-.steps {
-  padding-left: 1.2em;
-}
-
-/* 補足の囲み（接続済みのデバイスの案内など） */
-.notice {
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--ok);
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin: 8px 0;
-}
-
-.notice p,
-.notice ul {
-  margin: 4px 0;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    /* 引っぱってはみ出したところも地の色にする */
+    @apply bg-background;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-base text-foreground antialiased;
+  }
 }

@@ -1,6 +1,7 @@
 // エラーコードを画面に出す文言にする
 import type { LoginErrorCode } from "@press-call/shared";
 import { ApiProblem, AuthRequiredError } from "./api/client";
+import type { LoginReason } from "./lib/search";
 
 const LOGIN_ERRORS: Record<LoginErrorCode, string> = {
   oauth_denied: "Google のログインがキャンセルされました。",
@@ -25,6 +26,17 @@ const PROBLEMS: Record<string, string> = {
   not_found: "見つかりません。",
   db_unavailable: "サーバが混み合っています。少し待ってからもう一度お試しください。",
 };
+
+const LOGIN_NOTICES: Record<LoginReason, string> = {
+  refresh_token_reused: "安全のためログアウトしました。もう一度ログインしてください。",
+  session_expired: "ログインの期限が切れました。もう一度ログインしてください。",
+  logged_out: "ログアウトしました。",
+};
+
+/** ログイン画面に移った理由の文言 */
+export function loginNoticeMessage(reason: LoginReason | undefined): string | null {
+  return reason ? LOGIN_NOTICES[reason] : null;
+}
 
 /** API のエラーなどを画面の文言にする */
 export function errorMessage(err: unknown): string {

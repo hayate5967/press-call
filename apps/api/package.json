@@ -13,6 +13,7 @@
     "db:check": "drizzle-kit check",
     "device:issue-token": "tsx scripts/issue-device-token.ts",
     "device:settings": "tsx scripts/set-device-settings.ts",
+    "dev:seed-sets": "tsx scripts/seed-dev-sets.ts",
     "auth:generate-key": "tsx scripts/generate-jwt-key.ts"
   },
   "dependencies": {
