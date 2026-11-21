@@ -54,3 +54,52 @@ export async function listRepDetails(db: Db, setId: string) {
     .where(eq(reps.setId, setId))
     .orderBy(asc(reps.repIndex));
 }
+
+export type SetPatch = { weightKg?: number | null; rpe?: number | null; note?: string | null };
+
+/**
+ * 持ち主の削除していないセットの重量・RPE・メモを変える（渡した項目だけ）。
+ * 変えたら true。他人のセット・存在しないセット・削除したセットは false
+ */
+export async function updateOwnedSet(
+  db: Db,
+  userId: string,
+  setId: string,
+  patch: SetPatch,
+): Promise<boolean> {
+  const rows = await db
+    .update(sets)
+    .set({ ...patch, updatedAt: sql`now()` })
+    .where(and(eq(sets.id, setId), isNull(sets.deletedAt), ownedBy(userId)))
+    .returning({ id: sets.id });
+  return rows.length > 0;
+}
+
+/**
+ * セットを削除する。行は残して deleted_at を入れ（同じ clientSetId の再送で復活させないため）、
+ * レップと生データは消す（data-design.md の sets.deleted_at）。
+ * 消したら true。他人のセット・存在しないセット・削除済みのセットは false
+ */
+export async function softDeleteOwnedSet(db: Db, userId: string, setId: string): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(sets)
+      .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(and(eq(sets.id, setId), isNull(sets.deletedAt), ownedBy(userId)))
+      .returning({ id: sets.id });
+    if (rows.length === 0) return false;
+    await tx.delete(reps).where(eq(reps.setId, setId));
+    await tx.delete(setRawData).where(eq(setRawData.setId, setId));
+    return true;
+  });
+}
+
+/**
+ * セットの練習日が、そのユーザーのものか（UPDATE の WHERE 用。sets には user_id がないので練習日から見る）。
+ * 副問い合わせの中の id は training_sessions の id（内側の表が優先される）
+ */
+function ownedBy(userId: string) {
+  return sql`${sets.sessionId} in (
+    select ts.id from ${trainingSessions} ts where ts.user_id = ${userId}
+  )`;
+}

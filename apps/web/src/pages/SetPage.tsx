@@ -1,11 +1,13 @@
 // セットの詳細画面（/sets/{setId}）。レップごとの速度カーブ（FR-V02）と、
-// 自動合図モードの静止時間・反応時間・フライングの有無（FR-V08）
+// 自動合図モードの静止時間・反応時間・フライングの有無（FR-V08）。
+// いちばん上で重量・RPE・メモを入れ（FR-V04）、いちばん下で削除できる（FR-V05）
 import type { RepDetail, SetDetail } from "@press-call/shared";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import { ErrorAlert, Loading, Page } from "@/components/layout";
+import { DeleteSetCard, SetRecordCard } from "@/components/set-editor";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,8 +33,12 @@ export function SetPage() {
   const onBack = () => {
     if (canGoBack) router.history.back();
     else if (set.data) {
-      void navigate({ to: "/history/$sessionId", params: { sessionId: set.data.sessionId } });
-    } else void navigate({ to: "/history" });
+      void navigate({
+        to: "/history/$sessionId",
+        params: { sessionId: set.data.sessionId },
+        replace: true,
+      });
+    } else void navigate({ to: "/history", replace: true });
   };
 
   return (
@@ -43,12 +49,12 @@ export function SetPage() {
     >
       {set.isPending && <Loading />}
       <ErrorAlert message={set.error ? errorMessage(set.error) : null} />
-      {set.data && <SetDetailView set={set.data} />}
+      {set.data && <SetDetailView set={set.data} onDeleted={onBack} />}
     </Page>
   );
 }
 
-function SetDetailView(props: { set: SetDetail }) {
+function SetDetailView(props: { set: SetDetail; onDeleted: () => void }) {
   const { set } = props;
   const [selected, setSelected] = useState(set.reps[0]?.index ?? 1);
   const rep = set.reps.find((r) => r.index === selected);
@@ -57,6 +63,8 @@ function SetDetailView(props: { set: SetDetail }) {
 
   return (
     <>
+      <SetRecordCard set={set} />
+
       {rep ? (
         <Card>
           <CardHeader>
@@ -98,15 +106,12 @@ function SetDetailView(props: { set: SetDetail }) {
             <InfoRow label="時間">
               {formatTime(set.startedAt)}〜{formatTime(set.endedAt)}
             </InfoRow>
-            <InfoRow label="重量">
-              {set.weightKg === null ? "未入力" : `${set.weightKg} kg`}
-            </InfoRow>
-            <InfoRow label="RPE">{set.rpe === null ? "未入力" : set.rpe}</InfoRow>
-            {set.note && <InfoRow label="メモ">{set.note}</InfoRow>}
             <InfoRow label="生データ">{set.hasRawData ? "あり" : "なし"}</InfoRow>
           </dl>
         </CardContent>
       </Card>
+
+      <DeleteSetCard setId={set.id} onDeleted={props.onDeleted} />
     </>
   );
 }
