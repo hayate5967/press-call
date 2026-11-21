@@ -373,3 +373,25 @@ export const setDetailSchema = sessionSetSchema.extend({
   reps: z.array(repDetailSchema),
 });
 export type SetDetail = z.infer<typeof setDetailSchema>;
+
+// ---------- 新しく届いたセット（練習中の自動更新、FR-V07） ----------
+
+/** GET /sets?createdAfter= の 1 件 */
+export const newSetSchema = z.object({
+  id: z.uuid(),
+  sessionId: z.uuid(),
+  startedAt: z.iso.datetime(),
+  mode: modeSchema,
+  repCount: z.number().int().nonnegative(),
+  weightKg: z.number().nullable(),
+});
+export type NewSet = z.infer<typeof newSetSchema>;
+
+/** GET /sets?createdAfter= のレスポンス */
+export const newSetListSchema = z.object({
+  /** createdAfter より後にサーバに届いたセット（届いた順） */
+  items: z.array(newSetSchema),
+  /** 次の問い合わせの createdAfter にそのまま渡す時刻（サーバの時計） */
+  serverTime: z.iso.datetime(),
+});
+export type NewSetList = z.infer<typeof newSetListSchema>;

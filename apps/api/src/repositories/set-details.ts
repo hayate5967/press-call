@@ -1,5 +1,5 @@
 // セットの詳細を読む DB アクセス（Web アプリ向け）。持ち主の userId で絞り、削除したセットは返さない
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { reps, setRawData, sets, trainingSessions } from "../db/schema";
 
@@ -102,4 +102,49 @@ function ownedBy(userId: string) {
   return sql`${sets.sessionId} in (
     select ts.id from ${trainingSessions} ts where ts.user_id = ${userId}
   )`;
+}
+
+/**
+ * 次の問い合わせの基準にする時刻（DB の時計）。
+ * セットの created_at は登録のトランザクションを始めた時刻なので、この問い合わせの時点でまだ確定していない
+ * セットもありうる。少し前にずらしておき、次の問い合わせでそれも拾えるようにする（重なった分は画面が ID で除く）
+ */
+export const NEW_SETS_OVERLAP = "5 seconds";
+
+export async function serverTimeForNextPoll(db: Db): Promise<Date> {
+  const result = (await db.execute(
+    sql`select clock_timestamp() - ${NEW_SETS_OVERLAP}::interval as t`,
+  )) as unknown as { rows: { t: Date | string }[] }; // node-postgres も PGlite も { rows } を返す
+  const t = result.rows[0]?.t;
+  if (t === undefined) throw new Error("DB の時刻を取れませんでした");
+  return new Date(t);
+}
+
+/** createdAfter より後に届いた、持ち主の削除していないセット（届いた順、最大 limit 件） */
+export async function listSetsCreatedAfter(
+  db: Db,
+  userId: string,
+  createdAfter: Date,
+  limit: number,
+) {
+  return db
+    .select({
+      id: sets.id,
+      sessionId: sets.sessionId,
+      startedAt: sets.startedAt,
+      mode: sets.mode,
+      weightKg: sets.weightKg,
+      repCount: sql<number>`(select count(*)::int from ${reps} r where r.set_id = "sets"."id")`,
+    })
+    .from(sets)
+    .innerJoin(trainingSessions, eq(trainingSessions.id, sets.sessionId))
+    .where(
+      and(
+        eq(trainingSessions.userId, userId),
+        isNull(sets.deletedAt),
+        gt(sets.createdAt, createdAfter),
+      ),
+    )
+    .orderBy(asc(sets.createdAt), asc(sets.id))
+    .limit(limit);
 }

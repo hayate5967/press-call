@@ -1,12 +1,12 @@
 // セットの API（Web アプリ向け、API 仕様書 6 章）
 // すべて user 認証。他人のセットの ID を指定されたら 404
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { setDetailSchema, updateSetInputSchema } from "@press-call/shared";
+import { newSetListSchema, setDetailSchema, updateSetInputSchema } from "@press-call/shared";
 import { bodyLimit } from "hono/body-limit";
 import type { AppEnv } from "../env";
 import { userAuth } from "../middleware/auth-user";
 import { payloadTooLarge, problemResponse, validationHook } from "../middleware/error";
-import { deleteSet, getSetDetail, patchSet } from "../services/set-details";
+import { deleteSet, getSetDetail, listNewSets, patchSet } from "../services/set-details";
 
 const setIdParams = z.object({
   setId: z.uuid().openapi({ param: { name: "setId", in: "path" } }),
@@ -19,6 +19,34 @@ const notFound = problemResponse("セットがない・他人のセット・削�
 
 /** PATCH の本文の上限。メモ 500 文字（UTF-8 で最大 1.5KB 程度）に余裕を持たせる */
 const PATCH_MAX_BYTES = 8 * 1024;
+
+const newSetsRoute = createRoute({
+  method: "get",
+  path: "/sets",
+  tags: ["セット"],
+  summary: "新しく届いたセット（練習中の自動更新用）",
+  description:
+    "Web アプリが練習中に数秒おきに呼ぶ。次の createdAfter にはレスポンスの serverTime をそのまま渡す" +
+    "（スマホとサーバの時計のずれを避けるため）。serverTime は登録途中のセットを取りこぼさないよう少し前にずらしてあるので、" +
+    "同じセットが続けて返ることがある（ID で重複を除く）。createdAfter を付けなければ、セットは返さず serverTime だけを返す",
+  middleware: [userAuth] as const,
+  request: {
+    query: z.object({
+      createdAfter: z.iso
+        .datetime()
+        .optional()
+        .openapi({ param: { name: "createdAfter", in: "query" } }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "createdAfter より後に届いたセット（届いた順、最大 50 件）",
+      content: { "application/json": { schema: newSetListSchema } },
+    },
+    401: unauthorized,
+    422: problemResponse("createdAfter が ISO 8601 の日時でない（validation_failed）"),
+  },
+});
 
 const detailRoute = createRoute({
   method: "get",
@@ -87,6 +115,11 @@ const deleteRoute = createRoute({
 });
 
 export const setsRoutes = new OpenAPIHono<AppEnv>({ defaultHook: validationHook })
+  .openapi(newSetsRoute, async (c) => {
+    const { createdAfter } = c.req.valid("query");
+    c.header("Cache-Control", "no-store");
+    return c.json(await listNewSets(c.var.db, c.var.user.userId, createdAfter), 200);
+  })
   .openapi(detailRoute, async (c) => {
     const { setId } = c.req.valid("param");
     return c.json(await getSetDetail(c.var.db, c.var.user.userId, setId), 200);
