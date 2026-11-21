@@ -46,7 +46,7 @@ API はすべて `/api/v1` 以下に置き、「誰が呼ぶか」で 3 種類�
 
 ## 2. エンドポイント一覧
 
-全 25 本。パスは `/api/v1` を省略している。
+全 29 本。パスは `/api/v1` を省略している。
 
 | 分類 | メソッド | パス | 認証 | 内容 | 要件 |
 | --- | --- | --- | --- | --- | --- |
@@ -62,6 +62,8 @@ API はすべて `/api/v1` 以下に置き、「誰が呼ぶか」で 3 種類�
 | ペアリング | POST | `/pairings/deny` | user | 許可しない | FR-A03 |
 | デバイス向け | GET | `/device/settings` | device | 最新の設定を取得 | FR-D10, S07 |
 | デバイス向け | POST | `/device/sets` | device | セットとレップを登録（冪等） | FR-S02, S04 |
+| デバイス向け | GET | `/device/recording` | device | セットの開始・終了の指示を取得（5 秒おき） | FR-D03, S07 |
+| デバイス向け | PUT | `/device/recording` | device | 自分でセットを終えたことを知らせる | FR-D03 |
 | デバイス向け | PUT | `/device/sets/{clientSetId}/raw` | device | 生データを登録 | FR-D12 |
 | 練習日 | GET | `/sessions` | user | 練習日の一覧 | FR-V01 |
 | 練習日 | GET | `/sessions/{sessionId}` | user | 練習日のセットとレップ（速度分布用） | FR-V01, V03 |
@@ -75,6 +77,8 @@ API はすべて `/api/v1` 以下に置き、「誰が呼ぶか」で 3 種類�
 | デバイス管理 | POST | `/devices/{deviceId}/revoke` | user | デバイストークンを失効（盗難・紛失時） | FR-A04 |
 | 設定 | GET | `/devices/{deviceId}/settings` | user | 設定の取得 | FR-V06 |
 | 設定 | PUT | `/devices/{deviceId}/settings` | user | 設定の変更 | FR-V06 |
+| 記録の指示 | GET | `/devices/{deviceId}/recording` | user | 記録の状態（記録中か・デバイスに伝わったか） | FR-V11 |
+| 記録の指示 | PUT | `/devices/{deviceId}/recording` | user | セットの開始・終了 | FR-V11 |
 
 **パスの使い分け**：`/device/...`（単数形）は ESP32 が「自分自身」について呼ぶ API、`/devices/...`（複数形）はユーザーが「自分の持っているデバイス」を管理する API。デバイストークンでは `/device/...` の一部しか呼べないようにし、権限の境界をパスでも分ける。
 
@@ -254,7 +258,7 @@ sequenceDiagram
 
 ## 5. デバイス向け API
 
-ESP32 がデバイストークンで呼ぶ API は 3 本だけ。どれかが呼ばれると、そのデバイスの `last_seen_at`（とトークンの `last_used_at`）を更新する。ただし設定は数秒おきに問い合わせるので、前回の更新から 1 分以内なら書き直さない（2026-11-17 決定。DB の書き込みを減らすため）。
+ESP32 がデバイストークンで呼ぶ API は 5 本だけ。どれかが呼ばれると、そのデバイスの `last_seen_at`（とトークンの `last_used_at`）を更新する。ただし設定は数秒おきに問い合わせるので、前回の更新から 1 分以内なら書き直さない（2026-11-17 決定。DB の書き込みを減らすため）。
 
 ### GET /device/settings
 
@@ -332,6 +336,32 @@ ESP32 は `200` か `201` を受け取ったときだけ、その記録をフラ
 - 重量・RPE・メモはデバイスからは送らない（Web アプリで入力する）
 
 **時刻が合っていないとき（FR-S08）**：補正はファームで行い、API は何もしない。NTP で時刻を合わせる前に取った記録は、ファームが NTP 同期の後に「現在時刻 −（現在の uptime − 記録時の uptime）」で実時刻に直してから、普通の `startedAt` / `endedAt` として送る（要件定義書 4.3 のメモ）。
+
+### GET /device/recording
+
+セットの開始・終了の指示（ADR-0011）。記録中も含めて 5 秒おきに呼ぶ。呼ばれると、その番号（`seq`）を受け取ったものとして `acked_seq` に書く（変わったときだけ）。
+
+```json
+// 200 OK
+{ "recording": true, "seq": 12, "startedAt": "2026-11-21T10:00:03.120Z", "stoppedAt": "2026-11-21T09:58:40.000Z", "serverTime": "2026-11-21T10:00:05.900Z" }
+```
+
+- `seq` が前回と違えば新しい指示。`recording` が true なら `startedAt` より後に始まったレップからセットを組み立て、false なら `stoppedAt` までのレップでセットを閉じて送る
+- まだ一度もボタンが押されていなければ `{ "recording": false, "seq": 0, "startedAt": null, "stoppedAt": null, ... }`
+- `serverTime` は ESP32 の時計のずれを確かめるため（NTP 前などのとき）
+
+### PUT /device/recording
+
+記録中に一定時間（目安 3 分）動きがなく、ESP32 が自分でセットを終えたことを知らせる。画面が「記録中」のまま残らないようにするため。
+
+```json
+// リクエスト
+{ "recording": false, "seq": 12 }
+```
+
+- `seq` が今の番号と同じで記録中のときだけ、停止にして `stopped_at` を入れる（`seq` は増やさない）。違えば何もしない（その間に別の指示が出ている）
+- `200` で今の状態（`GET` と同じ形）を返す
+- ESP32 から止めることしかできない（`recording: true` は 422）
 
 ### PUT /device/sets/{clientSetId}/raw
 
@@ -456,6 +486,23 @@ X-Format-Version: 1
 ### POST /devices/{deviceId}/revoke
 
 そのデバイスのトークンをすべて失効させる（盗難・紛失時）。以降 ESP32 は `401 device_token_revoked` を受け取る。記録は消えない。再び使うにはペアリングし直す。`204 No Content`。失効済みのデバイスに呼んでも `204`（最初に失効させた日時は変えない）。
+
+### GET /devices/{deviceId}/recording と PUT /devices/{deviceId}/recording
+
+セットの開始・終了（FR-V11、ADR-0011）。今日タブの「セット開始」「セット終了」ボタンから呼ぶ。
+
+```json
+// PUT のリクエスト
+{ "recording": true }
+
+// GET・PUT のレスポンス（200 OK）
+{ "recording": true, "seq": 12, "startedAt": "2026-11-21T10:00:03.120Z", "stoppedAt": null, "ackedSeq": 11, "updatedAt": "2026-11-21T10:00:03.120Z" }
+```
+
+- PUT で今と違う状態を送ると `seq` を 1 増やし、開始なら `startedAt`、終了なら `stoppedAt` に今の時刻（DB の時計）を入れる。今と同じ状態を送っても何も変えない（二度押し・再送で番号が進まない）
+- `ackedSeq` が `seq` と同じなら「デバイスに伝わった」。違えばデバイスがまだ取りに来ていない（最大 5 秒）
+- 一度もボタンを押していなければ `{ "recording": false, "seq": 0, "ackedSeq": 0, "startedAt": null, "stoppedAt": null, "updatedAt": null }`
+- 失効したデバイスにも送れるが、取りに来ないので伝わらない（画面では使えるデバイスだけにボタンを出す）
 
 ### GET /devices/{deviceId}/settings と PUT /devices/{deviceId}/settings
 

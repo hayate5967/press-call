@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromForm, type SettingsForm, toForm } from "./settings-form";
+import { fromForm, type SettingsForm, settingsSummary, stepSeconds, toForm } from "./settings-form";
 
 const base: SettingsForm = {
   mode: "auto_signal",
@@ -58,5 +58,28 @@ describe("設定フォーム", () => {
       ok: false,
       errors: { stillThreshold: expect.any(String) },
     });
+  });
+});
+
+describe("settingsSummary", () => {
+  it("モードと待ち時間を 1 行にする", () => {
+    expect(settingsSummary({ mode: "auto_signal", pause: { mode: "fixed", fixedMs: 1000 } })).toBe(
+      "自動合図・固定 1.0 秒",
+    );
+    expect(
+      settingsSummary({ mode: "auto_signal", pause: { mode: "random", minMs: 500, maxMs: 1500 } }),
+    ).toBe("自動合図・ランダム 0.5〜1.5 秒");
+    expect(settingsSummary({ mode: "count_only", pause: null })).toBe("回数記録（合図なし）");
+  });
+});
+
+describe("stepSeconds", () => {
+  it("0.1 秒ずつ動かし、0.2〜5 秒に収める", () => {
+    expect(stepSeconds("1", 0.1)).toBe("1.1");
+    expect(stepSeconds("0.8", -0.1)).toBe("0.7");
+    expect(stepSeconds("0.2", -0.1)).toBe("0.2");
+    expect(stepSeconds("5", 0.1)).toBe("5.0");
+    expect(stepSeconds("", 0.1)).toBe("1.1");
+    expect(stepSeconds("abc", -0.1)).toBe("0.9");
   });
 });

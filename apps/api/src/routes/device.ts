@@ -3,12 +3,15 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import {
   createSetInputSchema,
   createSetResultSchema,
+  deviceRecordingSchema,
   deviceSettingsSchema,
+  deviceStopRecordingInputSchema,
 } from "@press-call/shared";
 import { bodyLimit } from "hono/body-limit";
 import type { AppEnv } from "../env";
 import { deviceAuth } from "../middleware/auth-device";
 import { payloadTooLarge, problemResponse, validationHook } from "../middleware/error";
+import { pollRecording, stopRecordingFromDevice } from "../services/device-recordings";
 import { getDeviceSettings } from "../services/device-settings";
 import { registerSet } from "../services/sets";
 
@@ -75,6 +78,55 @@ const getSettingsRoute = createRoute({
   },
 });
 
+const deviceUnauthorized = problemResponse(
+  "デバイストークンがない・存在しない（device_token_invalid）、または失効済み（device_token_revoked）",
+);
+
+const getRecordingRoute = createRoute({
+  method: "get",
+  path: "/device/recording",
+  tags: ["デバイス向け"],
+  summary: "セットの開始・終了の指示を取得（5 秒おき）",
+  description:
+    "ADR-0011。記録中も含めて 5 秒おきに呼ぶ。seq が前回と違えば新しい指示。" +
+    "recording が true なら startedAt より後に始まったレップから、false なら stoppedAt までのレップでセットを組み立てる。" +
+    "呼ばれると、その seq を受け取ったものとして記録する（画面で「伝わった」と出すため）",
+  middleware: [deviceAuth] as const,
+  responses: {
+    200: {
+      description: "今の指示。一度もボタンが押されていなければ recording: false・seq: 0",
+      content: { "application/json": { schema: deviceRecordingSchema } },
+    },
+    401: deviceUnauthorized,
+    503: problemResponse("DB につながらない（db_unavailable）。時間を置いて問い合わせ直す"),
+  },
+});
+
+const stopRecordingRoute = createRoute({
+  method: "put",
+  path: "/device/recording",
+  tags: ["デバイス向け"],
+  summary: "自分でセットを終えたことを知らせる",
+  description:
+    "記録中に一定時間動きがなく、ESP32 が自分でセットを終えたときに呼ぶ。seq が今と同じで記録中のときだけ停止にする" +
+    "（seq は増やさない）。違えば何もしない。ESP32 から開始はできない",
+  middleware: [deviceAuth] as const,
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: deviceStopRecordingInputSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "今の指示",
+      content: { "application/json": { schema: deviceRecordingSchema } },
+    },
+    401: deviceUnauthorized,
+    422: problemResponse("recording が false でない・seq がない（validation_failed）"),
+  },
+});
+
 /** ETag の値。設定の version をそのまま使う（例："4"） */
 export const settingsEtag = (version: number) => `"${version}"`;
 
@@ -105,4 +157,12 @@ export const device = new OpenAPIHono<AppEnv>({ defaultHook: validationHook })
       return c.body(null, 304);
     }
     return c.json(settings, 200);
+  })
+  .openapi(getRecordingRoute, async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await pollRecording(c.var.db, c.var.device.deviceId), 200);
+  })
+  .openapi(stopRecordingRoute, async (c) => {
+    const { seq } = c.req.valid("json");
+    return c.json(await stopRecordingFromDevice(c.var.db, c.var.device.deviceId, seq), 200);
   });

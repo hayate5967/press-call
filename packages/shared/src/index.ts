@@ -399,3 +399,40 @@ export const newSetListSchema = z.object({
   serverTime: z.iso.datetime(),
 });
 export type NewSetList = z.infer<typeof newSetListSchema>;
+
+// ---------- セットの開始・終了の指示（ADR-0011、FR-V11） ----------
+
+/** GET・PUT /devices/{deviceId}/recording のレスポンス（Web アプリ向け） */
+export const recordingStateSchema = z.object({
+  recording: z.boolean(),
+  /** 開始・終了のボタンを押すたびに +1（一度も押していなければ 0） */
+  seq: z.number().int().nonnegative(),
+  startedAt: z.iso.datetime().nullable(),
+  stoppedAt: z.iso.datetime().nullable(),
+  /** デバイスが受け取った番号。seq と同じなら「デバイスに伝わった」 */
+  ackedSeq: z.number().int().nonnegative(),
+  updatedAt: z.iso.datetime().nullable(),
+});
+export type RecordingState = z.infer<typeof recordingStateSchema>;
+
+/** PUT /devices/{deviceId}/recording のリクエスト */
+export const setRecordingInputSchema = z.object({ recording: z.boolean() });
+export type SetRecordingInput = z.infer<typeof setRecordingInputSchema>;
+
+/** GET・PUT /device/recording のレスポンス（ESP32 向け） */
+export const deviceRecordingSchema = z.object({
+  recording: z.boolean(),
+  seq: z.number().int().nonnegative(),
+  startedAt: z.iso.datetime().nullable(),
+  stoppedAt: z.iso.datetime().nullable(),
+  /** サーバの時刻（ESP32 の時計のずれを確かめるため） */
+  serverTime: z.iso.datetime(),
+});
+export type DeviceRecording = z.infer<typeof deviceRecordingSchema>;
+
+/** PUT /device/recording のリクエスト。ESP32 は自分で止めることしかできない */
+export const deviceStopRecordingInputSchema = z.object({
+  recording: z.literal(false),
+  seq: z.number().int().nonnegative().max(2_147_483_647),
+});
+export type DeviceStopRecordingInput = z.infer<typeof deviceStopRecordingInputSchema>;
