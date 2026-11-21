@@ -2,6 +2,7 @@
 import type { Pause, RepInput } from "@press-call/shared";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../db/client";
+import { pauseColumns } from "../db/pause";
 import { reps, sets, trainingSessions } from "../db/schema";
 
 export type SetKey = { setId: string; sessionId: string };
@@ -101,25 +102,4 @@ export async function insertReps(db: Db, setId: string, input: RepInput[]): Prom
  */
 function toReal(v: number | null): number | null {
   return v === null ? null : Math.fround(v);
-}
-
-/** API の pause（入れ子の形）を DB の列（pause_mode, pause_fixed_ms, ...）に展開する */
-function pauseColumns(pause: Pause | null) {
-  if (pause === null) {
-    return { pauseMode: null, pauseFixedMs: null, pauseMinMs: null, pauseMaxMs: null };
-  }
-  if (pause.mode === "fixed") {
-    return {
-      pauseMode: "fixed" as const,
-      pauseFixedMs: pause.fixedMs,
-      pauseMinMs: null,
-      pauseMaxMs: null,
-    };
-  }
-  return {
-    pauseMode: "random" as const,
-    pauseFixedMs: null,
-    pauseMinMs: pause.minMs,
-    pauseMaxMs: pause.maxMs,
-  };
 }

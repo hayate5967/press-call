@@ -11,6 +11,7 @@ import { devicesRoutes } from "./routes/devices";
 import { health } from "./routes/health";
 import { pairing } from "./routes/pairing";
 import { sessionsRoutes } from "./routes/sessions";
+import { setsRoutes } from "./routes/sets";
 
 export type { Bindings } from "./env";
 
@@ -60,6 +61,8 @@ export function createApp(overrides: Partial<AppOptions> = {}) {
     "/devices/*",
     "/sessions",
     "/sessions/*",
+    "/sets",
+    "/sets/*",
   ]) {
     api.use(path, db);
   }
@@ -70,6 +73,7 @@ export function createApp(overrides: Partial<AppOptions> = {}) {
   api.route("/", pairing);
   api.route("/", devicesRoutes);
   api.route("/", sessionsRoutes);
+  api.route("/", setsRoutes);
 
   // OpenAPI（API 仕様書と突き合わせるための自動生成）
   api.doc31("/openapi.json", {

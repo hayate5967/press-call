@@ -10,26 +10,34 @@ const BACK_LABELS = { "/": "今日", "/history": "履歴", "/settings": "設定"
 
 export function Page(props: {
   title: string;
-  /** 戻り先（タブの下の画面から、そのタブへ戻る） */
-  back?: keyof typeof BACK_LABELS;
+  /** タイトルの下の補足（日付など） */
+  subtitle?: string;
+  /** 戻り先。タブの下の画面ならそのタブのパス、前の画面へ戻るなら名前と処理 */
+  back?: keyof typeof BACK_LABELS | { label: string; onClick: () => void };
   children: ReactNode;
 }) {
+  const backClass =
+    "-ml-2 inline-flex h-11 w-fit items-center gap-0.5 rounded-full pr-3 pl-1 text-primary active:opacity-60";
   return (
     // 左右 16px・上は iPhone のノッチ（セーフエリア）を避ける
     <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-6">
       <header className="flex flex-col">
-        {props.back && (
-          // iOS の戻るボタンと同じく「‹ 戻り先の名前」。押せる高さは 44px
-          <Link
-            to={props.back}
-            className="-ml-2 inline-flex h-11 w-fit items-center gap-0.5 rounded-full pr-3 pl-1 text-primary active:opacity-60"
-          >
+        {/* iOS の戻るボタンと同じく「‹ 戻り先の名前」。押せる高さは 44px */}
+        {typeof props.back === "string" && (
+          <Link to={props.back} className={backClass}>
             <ChevronLeft className="size-6" aria-hidden />
             {BACK_LABELS[props.back]}
           </Link>
         )}
+        {typeof props.back === "object" && (
+          <button type="button" onClick={props.back.onClick} className={backClass}>
+            <ChevronLeft className="size-6" aria-hidden />
+            {props.back.label}
+          </button>
+        )}
         {/* iOS の大きいタイトル（34px・太字） */}
         <h1 className="text-[2.125rem] leading-[2.5rem] font-bold tracking-tight">{props.title}</h1>
+        {props.subtitle && <p className="text-sm text-muted-foreground">{props.subtitle}</p>}
       </header>
       {props.children}
     </main>

@@ -409,7 +409,7 @@ X-Format-Version: 1
 
 ### GET /sets/{setId}
 
-セットの詳細。`GET /sessions/{id}` の各セットの項目に加えて、使った設定（`pause`）、終了時刻、生データの有無（`hasRawData`）、各レップの全項目（速度カーブ `velocityCurve` を含む）を返す。
+セットの詳細。`GET /sessions/{id}` の各セットの項目に加えて、練習日の ID（`sessionId`）、使った設定（`pause`）、終了時刻（`endedAt`）、生データの有無（`hasRawData`）、各レップの全項目（速度カーブ `velocityCurve` を含む）を返す。他人のセット・削除したセットは `404 not_found`。
 
 ### PATCH /sets/{setId}
 
