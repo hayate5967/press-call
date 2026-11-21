@@ -1,45 +1,20 @@
 // デバイスの設定（モード・待ち時間・静止のしきい値）の DB アクセス
-import type {
-  DeviceSettings,
-  DeviceSettingsDetail,
-  DeviceSettingsInput,
-  Pause,
-} from "@press-call/shared";
+import type { DeviceSettings, DeviceSettingsDetail, DeviceSettingsInput } from "@press-call/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
+import { pauseColumns, pauseFromColumns } from "../db/pause";
 import { deviceSettings } from "../db/schema";
 
 type Row = typeof deviceSettings.$inferSelect;
 
-/** 待ち時間を DB の列（pause_mode・pause_fixed_ms・pause_min_ms・pause_max_ms）に分ける */
-function pauseColumns(pause: Pause | null) {
-  if (pause === null) {
-    return { pauseMode: null, pauseFixedMs: null, pauseMinMs: null, pauseMaxMs: null };
-  }
-  return pause.mode === "fixed"
-    ? {
-        pauseMode: "fixed" as const,
-        pauseFixedMs: pause.fixedMs,
-        pauseMinMs: null,
-        pauseMaxMs: null,
-      }
-    : {
-        pauseMode: "random" as const,
-        pauseFixedMs: null,
-        pauseMinMs: pause.minMs,
-        pauseMaxMs: pause.maxMs,
-      };
-}
-
 /** DB の行を API の形（GET /device/settings のレスポンス）にする */
 function toSettings(row: Row): DeviceSettings {
-  let pause: Pause | null = null;
-  if (row.pauseMode === "fixed" && row.pauseFixedMs !== null) {
-    pause = { mode: "fixed", fixedMs: row.pauseFixedMs };
-  } else if (row.pauseMode === "random" && row.pauseMinMs !== null && row.pauseMaxMs !== null) {
-    pause = { mode: "random", minMs: row.pauseMinMs, maxMs: row.pauseMaxMs };
-  }
-  return { version: row.version, mode: row.mode, pause, stillThreshold: row.stillThreshold };
+  return {
+    version: row.version,
+    mode: row.mode,
+    pause: pauseFromColumns(row),
+    stillThreshold: row.stillThreshold,
+  };
 }
 
 export async function findDeviceSettings(

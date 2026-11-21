@@ -38,9 +38,14 @@ export function formatSessionDate(date: string, today: string = todayInJapan()):
   return `${year}${m}月${d}日（${weekday}）`;
 }
 
-/** 今日の日付（日本時間、"2026-11-14" の形）。練習日の日付と比べるのに使う */
+/** その時刻の日本時間の日付（"2026-11-14" の形） */
+export function dateInJapan(at: Date): string {
+  return new Date(at.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/** 今日の日付（日本時間）。練習日の日付と比べるのに使う */
 export function todayInJapan(now: Date = new Date()): string {
-  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return dateInJapan(now);
 }
 
 /** 速度（m/s）を小数 2 桁にする。値がなければ「—」 */

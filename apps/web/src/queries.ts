@@ -5,6 +5,7 @@ import type {
   Me,
   SessionDetail,
   SessionList,
+  SetDetail,
 } from "@press-call/shared";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { api } from "./api/client";
@@ -17,6 +18,7 @@ export const queryKeys = {
   sessionList: ["sessions", "list"] as const,
   latestSession: ["sessions", "latest"] as const,
   session: (sessionId: string) => ["sessions", "detail", sessionId] as const,
+  set: (setId: string) => ["sets", setId] as const,
 };
 
 /** ログイン中のユーザー。取れなければ AuthRequiredError（ログインしていない） */
@@ -66,4 +68,11 @@ export const sessionDetailQuery = (sessionId: string) =>
   queryOptions({
     queryKey: queryKeys.session(sessionId),
     queryFn: async () => (await api.json<SessionDetail>(`/sessions/${sessionId}`)).data,
+  });
+
+/** セットの詳細（各レップの速度カーブつき） */
+export const setDetailQuery = (setId: string) =>
+  queryOptions({
+    queryKey: queryKeys.set(setId),
+    queryFn: async () => (await api.json<SetDetail>(`/sets/${setId}`)).data,
   });

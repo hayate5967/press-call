@@ -342,3 +342,34 @@ export const sessionDetailSchema = z.object({
   sets: z.array(sessionSetSchema),
 });
 export type SessionDetail = z.infer<typeof sessionDetailSchema>;
+
+// ---------- セットの詳細（API 仕様書 6 章、FR-V02・V08） ----------
+
+/** GET /sets/{id} のレップ。デバイスが送った項目をすべて返す（速度カーブを含む） */
+export const repDetailSchema = repSummarySchema.extend({
+  /** セットの開始からこのレップの開始までの時間 */
+  startOffsetMs: z.number().int(),
+  /** 下ろす時間 */
+  eccentricMs: z.number().int().nullable(),
+  /** 合図までの待ち時間（設定から決まった目標の値） */
+  pauseTargetMs: z.number().int().nullable(),
+  /** 挙げる時間 */
+  concentricMs: z.number().int().nullable(),
+  /** 速度カーブのサンプリング周波数 */
+  curveHz: z.number().int().nullable(),
+  /** 挙げている間の速度（m/s）の時系列 */
+  velocityCurve: z.array(z.number()).nullable(),
+});
+export type RepDetail = z.infer<typeof repDetailSchema>;
+
+/** GET /sets/{id} のレスポンス */
+export const setDetailSchema = sessionSetSchema.extend({
+  sessionId: z.uuid(),
+  endedAt: z.iso.datetime(),
+  /** そのセットで使った待ち時間の設定（回数記録モードなら null） */
+  pause: pauseSchema.nullable(),
+  /** センサーの生データが届いているか */
+  hasRawData: z.boolean(),
+  reps: z.array(repDetailSchema),
+});
+export type SetDetail = z.infer<typeof setDetailSchema>;

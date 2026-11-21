@@ -13,7 +13,12 @@ type Tab = {
 
 const TABS: Tab[] = [
   { to: "/", label: "今日", icon: CalendarDays, matches: (p) => p === "/" },
-  { to: "/history", label: "履歴", icon: History, matches: (p) => p.startsWith("/history") },
+  {
+    to: "/history",
+    label: "履歴",
+    icon: History,
+    matches: (p) => p.startsWith("/history") || p.startsWith("/sets"),
+  },
   {
     to: "/settings",
     label: "設定",

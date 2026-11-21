@@ -23,6 +23,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { PairPage } from "./pages/PairPage";
 import { SessionPage } from "./pages/SessionPage";
+import { SetPage } from "./pages/SetPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettingsTabPage } from "./pages/SettingsTabPage";
 import { TodayPage } from "./pages/TodayPage";
@@ -103,6 +104,15 @@ const sessionRoute = createRoute({
   component: SessionPage,
 });
 
+const setRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: "/sets/$setId",
+  beforeLoad: ({ params }) => {
+    if (!isUuid(params.setId)) throw notFound();
+  },
+  component: SetPage,
+});
+
 const settingsTabRoute = createRoute({
   getParentRoute: () => authRoute,
   path: "/settings",
@@ -131,6 +141,7 @@ const routeTree = rootRoute.addChildren([
     todayRoute,
     historyRoute,
     sessionRoute,
+    setRoute,
     settingsTabRoute,
     pairRoute,
     deviceSettingsRoute,

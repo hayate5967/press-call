@@ -17,8 +17,7 @@ export function TodayPage() {
 
   const error = latest.error ?? session.error;
   return (
-    <Page title="今日">
-      <p className="-mt-3 text-sm text-muted-foreground">{formatSessionDate(today)}</p>
+    <Page title="今日" subtitle={formatSessionDate(today)}>
       {(latest.isPending || (todaysId && session.isPending)) && !error && <Loading />}
       <ErrorAlert message={error ? errorMessage(error) : null} />
       {latest.isSuccess && todaysId === null && (
