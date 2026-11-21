@@ -1,5 +1,5 @@
 // デバイスとデバイストークンの DB アクセス
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { devices, deviceTokens } from "../db/schema";
 
@@ -114,4 +114,49 @@ export async function isOwnedDevice(db: Db, userId: string, deviceId: string): P
     .from(devices)
     .where(and(eq(devices.id, deviceId), eq(devices.userId, userId)));
   return row !== undefined;
+}
+
+/** 持ち主のデバイス 1 件（一覧と同じ形）。他人のデバイス・存在しないデバイスは undefined */
+export async function findOwnedDevice(
+  db: Db,
+  userId: string,
+  deviceId: string,
+): Promise<DeviceSummary | undefined> {
+  const [row] = await db
+    .select({
+      id: devices.id,
+      name: devices.name,
+      lastSeenAt: devices.lastSeenAt,
+      active: activeColumn,
+      createdAt: devices.createdAt,
+    })
+    .from(devices)
+    .where(and(eq(devices.id, deviceId), eq(devices.userId, userId)));
+  return row;
+}
+
+/** デバイスの名前を変える。変えたら true（他人のデバイス・存在しないデバイスは false） */
+export async function renameOwnedDevice(
+  db: Db,
+  userId: string,
+  deviceId: string,
+  name: string,
+): Promise<boolean> {
+  const rows = await db
+    .update(devices)
+    .set({ name })
+    .where(and(eq(devices.id, deviceId), eq(devices.userId, userId)))
+    .returning({ id: devices.id });
+  return rows.length > 0;
+}
+
+/**
+ * デバイスのトークンをすべて失効させる（まだ失効していないものだけ revoked_at を入れる）。
+ * 行は消さない（いつ失効したかを残す。data-design.md「トークンは削除せず失効日時を入れる」）
+ */
+export async function revokeDeviceTokens(db: Db, deviceId: string): Promise<void> {
+  await db
+    .update(deviceTokens)
+    .set({ revokedAt: sql`now()` })
+    .where(and(eq(deviceTokens.deviceId, deviceId), isNull(deviceTokens.revokedAt)));
 }

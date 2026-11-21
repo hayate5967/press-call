@@ -451,11 +451,11 @@ X-Format-Version: 1
 
 ### PATCH /devices/{deviceId}
 
-リクエストは `{ "name": "部室のベンチ 2" }`。`200` で更新後のデバイスを返す。
+リクエストは `{ "name": "部室のベンチ 2" }`。名前は前後の空白を落として 1〜50 文字（ペアリングの許可と同じ）。`200` で更新後のデバイスを返す。失効済みのデバイスも名前は変えられる。
 
 ### POST /devices/{deviceId}/revoke
 
-そのデバイスのトークンをすべて失効させる（盗難・紛失時）。以降 ESP32 は `401 device_token_revoked` を受け取る。記録は消えない。再び使うにはペアリングし直す。`204 No Content`。
+そのデバイスのトークンをすべて失効させる（盗難・紛失時）。以降 ESP32 は `401 device_token_revoked` を受け取る。記録は消えない。再び使うにはペアリングし直す。`204 No Content`。失効済みのデバイスに呼んでも `204`（最初に失効させた日時は変えない）。
 
 ### GET /devices/{deviceId}/settings と PUT /devices/{deviceId}/settings
 
