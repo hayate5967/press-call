@@ -19,6 +19,7 @@ export const queryKeys = {
   latestSession: ["sessions", "latest"] as const,
   session: (sessionId: string) => ["sessions", "detail", sessionId] as const,
   set: (setId: string) => ["sets", setId] as const,
+  newSets: ["sets", "new"] as const,
 };
 
 /** ログイン中のユーザー。取れなければ AuthRequiredError（ログインしていない） */

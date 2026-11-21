@@ -18,9 +18,17 @@ import { formatTime, formatVelocity } from "../format";
 // 点のグラフ（Recharts）は大きいので、セットが 2 つ以上あって分布を出すときだけ読み込む
 const DistributionChart = lazy(() => import("@/components/distribution-chart"));
 
-export function SessionSets(props: { session: SessionDetail }) {
+export function SessionSets(props: {
+  session: SessionDetail;
+  /** 新しく届いたセット（目立たせる） */
+  highlightIds?: ReadonlySet<string>;
+  /** 新しいセットを上に出す（練習中の「今日」タブ。番号は挙げた順のまま） */
+  newestFirst?: boolean;
+}) {
   const { session } = props;
   const { sets } = session;
+  const numbered = sets.map((set, i) => ({ set, number: i + 1 }));
+  if (props.newestFirst) numbered.reverse();
   const [metric, setMetric] = useState<Metric>("mean");
   const repTotal = sets.reduce((sum, s) => sum + s.repCount, 0);
   const max = axisMax(session, metric);
@@ -56,8 +64,15 @@ export function SessionSets(props: { session: SessionDetail }) {
         </Card>
       )}
 
-      {sets.map((set, i) => (
-        <SetCard key={set.id} set={set} number={i + 1} metric={metric} max={max} />
+      {numbered.map(({ set, number }) => (
+        <SetCard
+          key={set.id}
+          set={set}
+          number={number}
+          metric={metric}
+          max={max}
+          highlighted={props.highlightIds?.has(set.id) ?? false}
+        />
       ))}
     </div>
   );
@@ -111,7 +126,13 @@ function loadLabel(set: SessionSet): string {
   return parts.length > 0 ? parts.join("・") : "重量は未入力";
 }
 
-function SetCard(props: { set: SessionSet; number: number; metric: Metric; max: number }) {
+function SetCard(props: {
+  set: SessionSet;
+  number: number;
+  metric: Metric;
+  max: number;
+  highlighted: boolean;
+}) {
   const { set } = props;
   return (
     // カード全体を押すと、そのセットの詳細（速度カーブなど）へ
@@ -119,13 +140,21 @@ function SetCard(props: { set: SessionSet; number: number; metric: Metric; max: 
       to="/sets/$setId"
       params={{ setId: set.id }}
       aria-label={`セット ${props.number}（${formatTime(set.startedAt)}）の詳細を開く`}
-      className="block rounded-xl transition-transform active:scale-[0.99]"
+      className={cn(
+        "block rounded-xl transition-transform active:scale-[0.99]",
+        // 新しく届いたセットは、アクセントのオレンジの枠と「新着」で目立たせる（動きを減らす設定なら動かさない）
+        props.highlighted &&
+          "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-4",
+      )}
     >
-      <Card>
+      <Card className={cn(props.highlighted && "ring-2 ring-highlight")}>
         <CardHeader>
           <div className="flex items-baseline justify-between gap-3">
             <CardTitle className="flex items-center gap-2">
               セット {props.number}
+              {props.highlighted && (
+                <Badge className="bg-highlight text-highlight-foreground">新着</Badge>
+              )}
               {set.mode === "count_only" && <Badge variant="secondary">回数記録</Badge>}
             </CardTitle>
             <span className="flex items-center gap-1 text-sm text-muted-foreground tabular-nums">

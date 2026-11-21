@@ -1,12 +1,14 @@
 // セットの詳細（API 仕様書 6 章、FR-V02・V08）
-import type { SetDetail, UpdateSetInput } from "@press-call/shared";
+import type { NewSetList, SetDetail, UpdateSetInput } from "@press-call/shared";
 import type { Db } from "../db/client";
 import { pauseFromColumns } from "../db/pause";
 import { ApiError } from "../middleware/error";
 import {
   findOwnedSet,
   listRepDetails,
+  listSetsCreatedAfter,
   type SetPatch,
+  serverTimeForNextPoll,
   softDeleteOwnedSet,
   updateOwnedSet,
 } from "../repositories/set-details";
@@ -57,4 +59,28 @@ export async function deleteSet(db: Db, userId: string, setId: string): Promise<
   if (!(await softDeleteOwnedSet(db, userId, setId))) {
     throw new ApiError(404, "not_found", "見つかりません");
   }
+}
+
+/** 1 回の問い合わせで返すセットの上限（3 秒おきに呼ぶので、ふつうは 0〜1 件） */
+export const NEW_SETS_LIMIT = 50;
+
+/**
+ * 新しく届いたセット（GET /sets?createdAfter=、FR-V07）。
+ * createdAfter がなければセットは返さず、次の問い合わせに使う serverTime だけを返す（最初の 1 回）
+ */
+export async function listNewSets(
+  db: Db,
+  userId: string,
+  createdAfter: string | undefined,
+): Promise<NewSetList> {
+  // 先に基準の時刻を取ってから探す。探している間に届いたセットは、次の問い合わせで拾える
+  const serverTime = await serverTimeForNextPoll(db);
+  const rows =
+    createdAfter === undefined
+      ? []
+      : await listSetsCreatedAfter(db, userId, new Date(createdAfter), NEW_SETS_LIMIT);
+  return {
+    items: rows.map((r) => ({ ...r, startedAt: r.startedAt.toISOString() })),
+    serverTime: serverTime.toISOString(),
+  };
 }
