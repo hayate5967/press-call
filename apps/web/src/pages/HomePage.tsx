@@ -56,7 +56,21 @@ export function HomePage(props: { me: Me; onError: (err: unknown) => void; onLog
         </ul>
       )}
 
-      <h2>デバイスを追加する</h2>
+      {/* テザリングは毎回必要なので、初回だけの手順とは分けて先に書く */}
+      <h2>セットアップ</h2>
+      <p>
+        デバイスは iPhone のテザリングを通して記録を送ります。使うたびに次の手順でつないでください。
+      </p>
+      <ol className="steps">
+        <li>iPhone の「設定」アプリを開き、「インターネット共有」を押す</li>
+        <li>「ほかの人の接続を許可」をオンにする</li>
+        <li>「互換性を優先」をオンにする（デバイスは 2.4GHz の Wi-Fi にしかつながらないため）</li>
+        <li>
+          デバイスの電源を入れる。つながるまで「インターネット共有」の画面を開いたままにしておく
+        </li>
+      </ol>
+
+      <h2>初めて使う場合</h2>
       {connected.length > 0 && (
         <div className="notice">
           <p>接続済みのデバイスがあります。このまま使うなら、追加し直す必要はありません。</p>
@@ -68,21 +82,19 @@ export function HomePage(props: { me: Me; onError: (err: unknown) => void; onLog
         </div>
       )}
       <ol className="steps">
-        <li>iPhone のテザリングをオンにして、デバイスの電源を入れる</li>
+        <li>上のセットアップで、デバイスをテザリングにつなぐ</li>
         <li>
           {/* bench.local はデバイスが出すページ。この画面を残したまま別のタブで開く */}
           <a href="http://bench.local" target="_blank" rel="noopener noreferrer">
             http://bench.local
           </a>{" "}
-          を開き（新しいタブで開きます）、「Web アプリで許可する」を押す
-          <div className="muted small">
-            デバイスと同じテザリングにつながっているときだけ開けます
-          </div>
-        </li>
-        <li>
-          または、デバイスに表示されたコードを<Link to="/devices/pair">ここで入力</Link>する
+          を開き、「Web アプリで許可する」を押す
         </li>
       </ol>
+      <p className="muted small">
+        bench.local が開けないときは、そこに表示されるコードを
+        <Link to="/devices/pair">ここで入力</Link>して許可することもできます。
+      </p>
     </Page>
   );
 }
