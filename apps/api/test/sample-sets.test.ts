@@ -25,6 +25,12 @@ describe("sampleSetsForDay", () => {
     ]);
   });
 
+  it("レップ数を指定できる", () => {
+    const sets = sampleSetsForDay(day, 2, 1, 12);
+    expect(sets.map((s) => s.reps.length)).toEqual([12, 12]);
+    for (const set of sets) expect(createSetInputSchema.safeParse(set).success).toBe(true);
+  });
+
   it("同じ seed なら同じ記録（clientSetId 以外）になる", () => {
     const strip = (seed: number) =>
       sampleSetsForDay(day, 2, seed).map(({ clientSetId: _, ...rest }) => rest);

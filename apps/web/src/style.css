@@ -40,6 +40,10 @@
   --border: oklch(0.9 0.018 240);
   --input: oklch(0.9 0.018 240);
   --ring: oklch(0.53 0.2 257);
+  /* グラフの色（docs/design.md）。通常のレップと、合図より前に挙げたレップ。
+   * 色覚の違いがあっても見分けられることを検証スクリプトで確かめた値 */
+  --chart-rep: oklch(0.53 0.2 257);
+  --chart-premature: oklch(0.55 0.13 70);
   --card-shadow: 0 1px 2px oklch(0.3 0.05 250 / 0.05), 0 6px 20px -8px oklch(0.3 0.08 250 / 0.12);
 }
 
@@ -67,6 +71,9 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 12%);
     --ring: oklch(0.7 0.15 250);
+    /* 暗い地では明るすぎる色が浮くので、グラフは本文の色より少し暗くする */
+    --chart-rep: oklch(0.64 0.16 252);
+    --chart-premature: oklch(0.66 0.15 70);
     /* 暗い画面では影が見えないので、カードは地より明るい色で浮かせる */
     --card-shadow: none;
   }
@@ -115,6 +122,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-rep: var(--chart-rep);
+  --color-chart-premature: var(--chart-premature);
   --shadow-card: var(--card-shadow);
   /* iPhone では San Francisco とヒラギノ角ゴ（システムフォント）になる */
   --font-sans:

@@ -162,8 +162,9 @@ function RepStats(props: { rep: RepDetail; auto: boolean }) {
         </Alert>
       )}
       <dl className="grid grid-cols-2 gap-2">
-        <Stat label="平均速度（MCV）" value={`${formatVelocity(rep.meanVelocityMps)} m/s`} />
-        <Stat label="最大速度（PCV）" value={`${formatVelocity(rep.peakVelocityMps)} m/s`} />
+        {/* いちばん大事な値なので、ほかの数値より大きく書く */}
+        <Stat label="平均速度（MCV）" value={formatVelocity(rep.meanVelocityMps)} unit="m/s" hero />
+        <Stat label="最大速度（PCV）" value={formatVelocity(rep.peakVelocityMps)} unit="m/s" hero />
         <Stat label="下ろす時間" value={formatSeconds(rep.eccentricMs)} />
         <Stat label="挙げる時間" value={formatSeconds(rep.concentricMs)} />
         {auto && (
@@ -187,11 +188,23 @@ function RepStats(props: { rep: RepDetail; auto: boolean }) {
   );
 }
 
-function Stat(props: { label: string; value: string; note?: string }) {
+function Stat(props: {
+  label: string;
+  value: string;
+  unit?: string;
+  note?: string;
+  /** 大きく見せる値（速度） */
+  hero?: boolean;
+}) {
   return (
     <div className="rounded-md bg-secondary px-3 py-2.5">
       <dt className="text-xs text-muted-foreground">{props.label}</dt>
-      <dd className="text-lg font-semibold">{props.value}</dd>
+      <dd className={cn("font-semibold", props.hero ? "text-4xl leading-tight" : "text-lg")}>
+        {props.value}
+        {props.unit && (
+          <span className="ml-1 text-sm font-medium text-muted-foreground">{props.unit}</span>
+        )}
+      </dd>
       {props.note && <dd className="text-xs text-muted-foreground">{props.note}</dd>}
     </div>
   );
@@ -243,8 +256,12 @@ function RepTable(props: { reps: RepDetail[]; auto: boolean }) {
                     )}
                   </span>
                 </th>
-                <td className={td}>{formatVelocity(r.meanVelocityMps)}</td>
-                <td className={td}>{formatVelocity(r.peakVelocityMps)}</td>
+                <td className={cn(td, "text-base font-semibold")}>
+                  {formatVelocity(r.meanVelocityMps)}
+                </td>
+                <td className={cn(td, "text-base font-semibold")}>
+                  {formatVelocity(r.peakVelocityMps)}
+                </td>
                 {auto && (
                   <>
                     <td className={td}>{seconds(r.pauseActualMs)}</td>
