@@ -11,6 +11,7 @@
 #include "device_clock.h"
 #include "device_token.h"
 #include "pairing_codec.h"
+#include "recording_codec.h"
 #include "secrets_include.h"
 #include "send_policy.h"
 #include "set_codec.h"
@@ -27,11 +28,16 @@ constexpr BaseType_t kCore = 0;
 constexpr uint32_t kLoopMs = 50;  // bench.local のページに素早く応えるため短めにする
 constexpr uint32_t kWaitForNtpMs = 1000;
 constexpr uint32_t kSettingsPollMs = 5000;  // 設定を問い合わせる間隔（FR-S07。セット中は止める）
+constexpr uint32_t kRecordingPollMs = 5000;  // 開始・終了の指示を問い合わせる間隔（ADR-0011。セット中も続ける）
+constexpr uint32_t kManualStaleMs = 15000;   // これより長く指示を取れなければ、動きで区切るほうに戻す
 constexpr uint32_t kPageRefreshMs = 1000;   // bench.local の残り時間などを作り直す間隔
 constexpr char kFirmwareVersion[] = "0.2.0";
 
 QueueHandle_t gInSetBox = nullptr;     // 計測 → NetTask：セット中か（長さ 1、上書き）
 QueueHandle_t gSettingsBox = nullptr;  // NetTask → 計測：新しい設定（長さ 1、上書き）
+QueueHandle_t gRecordingBox = nullptr; // NetTask → 計測：開始・終了の指示（長さ 1、上書き）
+QueueHandle_t gAutoStopBox = nullptr;  // 計測 → NetTask：自分で終えたセットの seq（長さ 1、上書き）
+std::atomic<bool> gManualAvailable{false};  // 指示を最近取れているか（計測側が読む）
 DeviceSettings gCurrent{};             // NetTask が知っている最新の設定（NetTask だけが触る）
 uint32_t gFingerprint = 0;             // 今のデバイストークンの指紋（保存した設定と照らし合わせる）
 std::string gToken;                    // 今のデバイストークン（空ならペアリング中）。NetTask だけが触る
@@ -109,6 +115,7 @@ void setPhase(PairingPage::Phase phase, const char* message = "") {
 uint32_t gFailures = 0;
 uint32_t gNextAttemptMs = 0;
 uint32_t gNextPollMs = 0;
+uint32_t gNextRecordingPollMs = 0;  // 次に開始・終了の指示を問い合わせる時刻
 
 /** トークンを使い始める（起動時に NVS から読んだとき・ペアリングで受け取ったとき） */
 void adoptToken(const std::string& token) {
@@ -124,6 +131,7 @@ void adoptToken(const std::string& token) {
     gFailures = 0;
     gNextAttemptMs = millis();
     gNextPollMs = millis();
+    gNextRecordingPollMs = millis();
     setPhase(PairingPage::Phase::Paired);
 }
 
@@ -370,6 +378,74 @@ void pollSettings() {
                   fetched.hasStillThreshold ? String(fetched.stillThreshold, 3).c_str() : "default");
 }
 
+// ---- セットの開始・終了の指示（ADR-0011） ----
+
+uint32_t gLastRecordingOkMs = 0;
+bool gHasRecordingOk = false;
+bool gHasPendingStop = false;  // サーバにまだ伝えられていない「自分で終えた」
+uint32_t gPendingStopSeq = 0;
+
+/** 応答の指示を、この機器の uptime に直して計測側に渡す */
+void deliverRecording(const RecordingCommand& c, uint64_t responseUptimeMs) {
+    RecordingInstruction ins;
+    ins.seq = c.seq;
+    ins.recording = c.recording;
+    if (c.startedAtMs >= 0) {
+        ins.startUptimeMs = serverTimeToUptime(c.startedAtMs, c.serverTimeMs, responseUptimeMs);
+    }
+    if (c.stoppedAtMs >= 0) {
+        ins.hasStop = true;
+        ins.stopUptimeMs = serverTimeToUptime(c.stoppedAtMs, c.serverTimeMs, responseUptimeMs);
+    }
+    xQueueOverwrite(gRecordingBox, &ins);
+}
+
+/** GET /device/recording：指示を取る（5 秒おき、セット中も） */
+void pollRecording() {
+    gNextRecordingPollMs = millis() + kRecordingPollMs;
+    std::string response;
+    const int status = request("GET", "/device/recording", nullptr, String(), response);
+    const uint64_t responseUptime = clock::uptimeMs();
+    if (status == 401) {
+        forgetToken(classifyResponse(status, response));
+        return;
+    }
+    RecordingCommand c;
+    if (status != 200 || !parseRecordingJson(response, c)) {
+        // 15 秒取れなければ、計測側は動きで区切るほうに戻る（manualAvailable）
+        Serial.printf("# NET recording fetch failed (%d)\n", status);
+        return;
+    }
+    gLastRecordingOkMs = millis();
+    gHasRecordingOk = true;
+    deliverRecording(c, responseUptime);
+}
+
+/** PUT /device/recording：ボタンで始めたセットを自分で終えたことを伝える */
+void reportAutoStop() {
+    std::string response;
+    const std::string body = buildStopRecordingBody(gPendingStopSeq);
+    const int status = request("PUT", "/device/recording", &body, String(), response);
+    if (status == 401) {
+        forgetToken(classifyResponse(status, response));
+        return;
+    }
+    if (status == 200) {
+        gHasPendingStop = false;
+        Serial.printf("# NET reported auto stop (seq %lu)\n",
+                      static_cast<unsigned long>(gPendingStopSeq));
+        RecordingCommand c;
+        if (parseRecordingJson(response, c)) deliverRecording(c, clock::uptimeMs());
+        return;
+    }
+    if (status == 422) {
+        gHasPendingStop = false;  // 送り直しても通らない
+        Serial.printf("# NET auto stop rejected: %.200s\n", response.c_str());
+        return;
+    }
+    Serial.printf("# NET auto stop report failed (%d), will retry\n", status);  // 次の問い合わせで再び
+}
+
 bool inSetNow() {
     bool inSet = false;
     xQueuePeek(gInSetBox, &inSet, 0);
@@ -414,6 +490,7 @@ void netTask(void*) {
                 // つながったらすぐ再送・設定の問い合わせ・ペアリングを試す
                 gNextAttemptMs = millis();
                 gNextPollMs = millis();
+                gNextRecordingPollMs = millis();
                 gNextPairingMs = millis();
             }
         }
@@ -425,6 +502,9 @@ void netTask(void*) {
 
         bench::handle();
         if (millis() - gLastPageMs >= kPageRefreshMs) refreshPage();
+        // 指示を最近取れていれば、計測側はボタンで区切る。取れなければ動きで区切る
+        gManualAvailable = connected && !gToken.empty() && gHasRecordingOk &&
+                           millis() - gLastRecordingOkMs < kManualStaleMs;
         if (!connected) continue;
 
         if (gToken.empty()) {
@@ -433,6 +513,15 @@ void netTask(void*) {
             continue;
         }
         if (static_cast<int32_t>(millis() - gNextAttemptMs) >= 0) sendOldest();
+        uint32_t stoppedSeq = 0;
+        if (xQueueReceive(gAutoStopBox, &stoppedSeq, 0) == pdTRUE) {
+            gHasPendingStop = true;
+            gPendingStopSeq = stoppedSeq;
+        }
+        if (!gToken.empty() && static_cast<int32_t>(millis() - gNextRecordingPollMs) >= 0) {
+            if (gHasPendingStop) reportAutoStop();
+            if (!gToken.empty()) pollRecording();
+        }
         if (!gToken.empty() && !inSetNow() && static_cast<int32_t>(millis() - gNextPollMs) >= 0) {
             pollSettings();
         }
@@ -454,7 +543,9 @@ bool start(const DeviceSettings& current) {
     gOwnerFingerprint = gFingerprint;
     gInSetBox = xQueueCreate(1, sizeof(bool));
     gSettingsBox = xQueueCreate(1, sizeof(DeviceSettings));
-    if (!gInSetBox || !gSettingsBox) return false;
+    gRecordingBox = xQueueCreate(1, sizeof(RecordingInstruction));
+    gAutoStopBox = xQueueCreate(1, sizeof(uint32_t));
+    if (!gInSetBox || !gSettingsBox || !gRecordingBox || !gAutoStopBox) return false;
     const bool notInSet = false;
     xQueueOverwrite(gInSetBox, &notInSet);
     return xTaskCreatePinnedToCore(netTask, "NetTask", kStackBytes, nullptr, kPriority, nullptr,
@@ -463,6 +554,16 @@ bool start(const DeviceSettings& current) {
 
 void setInSet(bool inSet) {
     if (gInSetBox) xQueueOverwrite(gInSetBox, &inSet);
+}
+
+bool takeRecordingInstruction(RecordingInstruction& out) {
+    return gRecordingBox && xQueueReceive(gRecordingBox, &out, 0) == pdTRUE;
+}
+
+bool manualAvailable() { return gManualAvailable; }
+
+void notifyAutoStopped(uint32_t seq) {
+    if (gAutoStopBox) xQueueOverwrite(gAutoStopBox, &seq);
 }
 
 bool takeNewSettings(DeviceSettings& out) {

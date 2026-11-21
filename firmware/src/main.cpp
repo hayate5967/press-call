@@ -5,7 +5,11 @@
 //   2. 2 秒間静止させてキャリブレーション（真上の向き・重力・ジャイロのずれを測る）。終わると長めに 1 回鳴る
 //   3. 上下方向の速度を推定し、PauseDetector で「下降 → 静止 → 合図 → 挙上」を判定する
 //   4. 静止が待ち時間続いたらブザーで Press 合図。レップが終わるたびに結果をシリアルに出す
-//   5. 15 秒動きがなければセット終了。記録を StorageTask に渡してすぐ LittleFS に保存し、NetTask が API に送る
+//   5. セットの開始・終了は Web アプリのボタンで決める（ADR-0011）。NetTask が 5 秒おきに指示を取り、
+//      押した時刻でセットを区切る（届く前のレップもさかのぼって入れる）。記録中は LED をゆっくり点滅させる。
+//      記録中に 3 分動きがなければ自分で終え、サーバに伝える。
+//      サーバにつながらないあいだは、これまでどおり「15 秒動きがなければ終了」で区切る。
+//      終わったセットは StorageTask に渡してすぐ LittleFS に保存し、NetTask が API に送る
 //   6. モード・待ち時間（固定 / ランダム）・静止のしきい値は API から取る（NetTask が 5 秒おきに問い合わせる）。
 //      新しい設定はセットの合間にだけ反映する。取れないときは前回保存した設定、それもなければ既定値で動く
 //
@@ -58,6 +62,10 @@ constexpr BaseType_t kMeasureCore = 1;
 // ---- 合図 ----
 constexpr uint32_t kSignalBeepMs = 150;
 
+// ---- 記録中の LED（ボタンで始めたセットの途中、ゆっくり点滅。音は鳴らさない） ----
+constexpr uint32_t kRecordingBlinkPeriodMs = 2000;
+constexpr uint32_t kRecordingBlinkOnMs = 1000;
+
 // ---- デバッグ出力 ----
 constexpr bool kPrintRawCsv = false;    // true にすると生データの CSV を出す（データ取り用）
 constexpr bool kPrintVelocity = true;   // true にすると 0.1 秒ごとに速度と状態を出す（しきい値の調整用）
@@ -78,8 +86,15 @@ void beepFor(uint32_t ms) {
     buzzerOffAtMs = millis() + ms;
 }
 
+bool recordingLed = false;  // 記録中の点滅を出すか（計測タスクが決める）
+
 void updateBuzzer(uint32_t now) {
     if (buzzerOn && static_cast<int32_t>(now - buzzerOffAtMs) >= 0) buzzer(false);
+    // 合図を鳴らしていないあいだだけ、記録中の点滅を出す（合図の LED を邪魔しない）
+    if (!buzzerOn) {
+        const bool on = recordingLed && (now % kRecordingBlinkPeriodMs) < kRecordingBlinkOnMs;
+        digitalWrite(kLedPin, on ? HIGH : LOW);
+    }
 }
 
 // 起動時の確認用だけは止めてよいので delay を使う
@@ -207,19 +222,52 @@ const char* phaseName(Phase p) {
 }
 
 void onSetFinished() {
-    auto set = std::make_unique<SetRecord>(recorder.takeFinished());
-    const unsigned reps = static_cast<unsigned>(set->reps.size());
-    // StorageTask に渡すだけ。保存（フラッシュへの書き込み）は向こうで行うので、ここでは待たない
-    if (presscall::storage::submit(std::move(set))) {
-        Serial.printf("# SET END: %u reps -> StorageTask\n", reps);
-    } else {
-        Serial.printf("# SET END: %u reps, but StorageTask queue is full. Set lost\n", reps);
+    // 開始の指示でセットを閉じた直後など、1 回に 2 つ終わることもある
+    while (recorder.hasFinished()) {
+        auto set = std::make_unique<SetRecord>(recorder.takeFinished());
+        const unsigned reps = static_cast<unsigned>(set->reps.size());
+        // StorageTask に渡すだけ。保存（フラッシュへの書き込み）は向こうで行うので、ここでは待たない
+        if (presscall::storage::submit(std::move(set))) {
+            Serial.printf("# SET END: %u reps -> StorageTask\n", reps);
+        } else {
+            Serial.printf("# SET END: %u reps, but StorageTask queue is full. Set lost\n", reps);
+        }
     }
     // 下降や合図のまま止まってセットが終わったときは、判定を最初（Top）に戻す
     if (detector.phase() != Phase::Top) {
         detector = PauseDetector{detectorConfig()};
         detector.setPauseTargetMs(nextPauseTargetMs());
     }
+}
+
+// ---- セットの開始・終了の指示（ADR-0011） ----
+
+constexpr uint32_t kNoSeq = 0xFFFFFFFF;  // まだ指示を受け取っていない（起動直後）
+uint32_t appliedSeq = kNoSeq;            // 最後に反映した指示の番号
+
+/** NetTask から指示が届いていれば反映する。セットが終わったら true */
+bool applyRecordingInstruction(uint64_t nowUptime) {
+    recorder.setManualAvailable(presscall::net::manualAvailable());
+    presscall::net::RecordingInstruction ins;
+    if (!presscall::net::takeRecordingInstruction(ins)) return false;
+    if (ins.seq == appliedSeq) return false;  // 同じ指示（5 秒おきに届く）
+    const bool firstAfterBoot = appliedSeq == kNoSeq;
+    appliedSeq = ins.seq;
+
+    bool finished = false;
+    if (ins.recording) {
+        // 終了と開始が 1 回の問い合わせのあいだに続けて押された：前のセットを終了の時刻で閉じてから始める
+        if (recorder.inManualSet() && ins.hasStop) {
+            finished = recorder.stopManual(nowUptime, ins.stopUptimeMs);
+        }
+        finished = recorder.startManual(nowUptime, ins.startUptimeMs) || finished;
+        Serial.printf("# REC start (seq %lu%s)\n", static_cast<unsigned long>(ins.seq),
+                      firstAfterBoot ? ", already recording at boot" : "");
+    } else if (recorder.inManualSet()) {
+        finished = recorder.stopManual(nowUptime, ins.hasStop ? ins.stopUptimeMs : nowUptime);
+        Serial.printf("# REC stop (seq %lu)\n", static_cast<unsigned long>(ins.seq));
+    }
+    return finished;
 }
 
 void onSample(uint64_t nowUptime, const ImuSample& s) {
@@ -265,7 +313,14 @@ void onSample(uint64_t nowUptime, const ImuSample& s) {
         detector.setPauseTargetMs(nextPauseTargetMs());
     }
 
-    if (setFinished) onSetFinished();
+    const bool instructed = applyRecordingInstruction(nowUptime);
+    if (setFinished || instructed) onSetFinished();
+    if (recorder.takeAutoStopped()) {
+        // ボタンで始めたセットを、動きがないので自分で終えた。画面が「記録中」のまま残らないよう伝える
+        Serial.printf("# REC auto stop (seq %lu)\n", static_cast<unsigned long>(appliedSeq));
+        presscall::net::notifyAutoStopped(appliedSeq);
+    }
+    recordingLed = recorder.inManualSet();
 
     // セット中かどうかが変わったら NetTask に知らせる（セット中は設定を問い合わせない）
     if (recorder.inSet() != reportedInSet) {

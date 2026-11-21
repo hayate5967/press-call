@@ -50,10 +50,11 @@ void SetRecorder::addCurveSample(float v) {
     curve_.push_back(avg);
 }
 
-void SetRecorder::completeRep(uint64_t nowMs, const RepResult& lastRep) {
+RepRecord SetRecorder::buildRep(uint64_t nowMs, const RepResult& lastRep) {
     RepRecord rep;
     rep.result = lastRep;
-    rep.startOffsetMs = static_cast<uint32_t>(descentStartMs_ - current_.startedUptimeMs);
+    rep.descentUptimeMs = descentStartMs_;
+    rep.endUptimeMs = nowMs;
     rep.eccentricMs = static_cast<uint32_t>(stillStartMs_ - descentStartMs_);
     rep.concentricMs = static_cast<uint32_t>(nowMs - ascentStartMs_);
     const float mean =
@@ -61,47 +62,117 @@ void SetRecorder::completeRep(uint64_t nowMs, const RepResult& lastRep) {
     rep.meanVelocityMps = mean > 0.0f ? mean : 0.0f;  // API は 0 以上
     rep.peakVelocityMps = ascendPeak_;
     rep.curveHz = config_.sampleHz / decimation_;
-    lastRep_ = rep;  // カーブを入れる前に写す
     rep.curve = std::move(curve_);
     curve_.clear();
-
-    current_.reps.push_back(std::move(rep));
-    current_.endedUptimeMs = nowMs;
+    return rep;
 }
 
-bool SetRecorder::finishSet(uint64_t nowMs) {
+void SetRecorder::beginSet(uint64_t startUptimeMs, bool manual) {
+    inSet_ = true;
+    manualSet_ = manual;
+    current_ = SetRecord{};
+    current_.settings = settings_;
+    current_.startedUptimeMs = startUptimeMs;
+    current_.endedUptimeMs = startUptimeMs;
+}
+
+// セットの開始からの時刻を入れてセットに足す
+void SetRecorder::addToSet(RepRecord&& rep) {
+    rep.startOffsetMs = static_cast<uint32_t>(rep.descentUptimeMs - current_.startedUptimeMs);
+    current_.endedUptimeMs = rep.endUptimeMs;
+    current_.reps.push_back(std::move(rep));
+}
+
+// セットの外で終わったレップを、さかのぼり用にしばらく持っておく（古いものから捨てる）
+void SetRecorder::keepInPreBuffer(RepRecord&& rep, uint64_t nowMs) {
+    preBuffer_.push_back(std::move(rep));
+    while (!preBuffer_.empty() && nowMs - preBuffer_.front().endUptimeMs > config_.preBufferMs) {
+        preBuffer_.pop_front();
+    }
+}
+
+bool SetRecorder::finishSet(uint64_t nowMs, uint64_t endedUptimeMs) {
     inSet_ = false;
+    manualSet_ = false;
     current_.finishedUptimeMs = nowMs;
+    current_.endedUptimeMs = endedUptimeMs;
     if (current_.reps.empty()) {
         current_ = SetRecord{};
-        return false;  // ラックアウトの揺れだけなど、レップのないセットは送らない
+        return false;  // ラックアウトの揺れだけ・押しただけなど、レップのないセットは送らない
     }
-    finished_ = std::move(current_);
+    finished_.push_back(std::move(current_));
     current_ = SetRecord{};
     return true;
 }
 
 SetRecord SetRecorder::takeFinished() {
-    SetRecord out = std::move(finished_);
-    finished_ = SetRecord{};
+    if (finished_.empty()) return SetRecord{};
+    SetRecord out = std::move(finished_.front());
+    finished_.pop_front();
     return out;
+}
+
+bool SetRecorder::takeAutoStopped() {
+    const bool stopped = autoStopped_;
+    autoStopped_ = false;
+    return stopped;
+}
+
+bool SetRecorder::startManual(uint64_t nowMs, uint64_t startUptimeMs) {
+    const uint64_t start = startUptimeMs < nowMs ? startUptimeMs : nowMs;
+    bool finished = false;
+
+    // 今のセットの途中なら閉じる。押した時刻より後に始まったレップは、新しいセットに移す
+    std::vector<RepRecord> carried;
+    if (inSet_) {
+        std::vector<RepRecord> kept;
+        for (auto& rep : current_.reps) {
+            (rep.descentUptimeMs >= start ? carried : kept).push_back(std::move(rep));
+        }
+        current_.reps = std::move(kept);
+        const uint64_t ended =
+            current_.reps.empty() ? current_.startedUptimeMs : current_.reps.back().endUptimeMs;
+        finished = finishSet(nowMs, ended);
+    }
+
+    beginSet(start, true);
+    // さかのぼり：押した時刻より後に下降を始めたレップを、古い順に入れる
+    for (auto& rep : preBuffer_) {
+        if (rep.descentUptimeMs >= start) addToSet(std::move(rep));
+    }
+    preBuffer_.clear();
+    for (auto& rep : carried) addToSet(std::move(rep));
+    current_.endedUptimeMs =
+        current_.reps.empty() ? start : current_.reps.back().endUptimeMs;
+    // 開始の時点を「動きがあった」とみなす（押してすぐに 3 分の判定が始まらないように）
+    if (lastPhaseChangeMs_ < nowMs) lastPhaseChangeMs_ = nowMs;
+    return finished;
+}
+
+bool SetRecorder::stopManual(uint64_t nowMs, uint64_t stopUptimeMs) {
+    if (!inManualSet()) return false;
+    uint64_t stop = stopUptimeMs < nowMs ? stopUptimeMs : nowMs;
+    if (stop < current_.startedUptimeMs) stop = current_.startedUptimeMs;
+    // 押した時刻より後に挙げきったレップは入れない（押してから届くまでのあいだに始めたレップ）
+    while (!current_.reps.empty() && current_.reps.back().endUptimeMs > stop) {
+        current_.reps.pop_back();
+    }
+    return finishSet(nowMs, stop);
 }
 
 bool SetRecorder::update(uint64_t nowMs, Phase phase, float velocity, Event event,
                          const RepResult& lastRep) {
     const bool changed = phase != prevPhase_;
     if (changed) lastPhaseChangeMs_ = nowMs;
+    bool finished = false;
 
     if (changed) {
         switch (phase) {
             case Phase::Descending:
                 if (prevPhase_ == Phase::Top) {
-                    if (!inSet_) {
-                        inSet_ = true;
-                        current_ = SetRecord{};
-                        current_.settings = settings_;
-                        current_.startedUptimeMs = nowMs;
-                    }
+                    // 動きで区切るとき（つながっていない）だけ、下降でセットを始める
+                    if (!inSet_ && !manualAvailable_) beginSet(nowMs, false);
+                    repInProgress_ = true;
                     startRep(nowMs);
                 }
                 break;
@@ -117,23 +188,39 @@ bool SetRecorder::update(uint64_t nowMs, Phase phase, float velocity, Event even
     }
     prevPhase_ = phase;
 
-    if (phase == Phase::Ascending && inSet_) {
+    if (phase == Phase::Ascending && repInProgress_) {
         ascendSum_ += velocity;
         ++ascendSamples_;
         if (velocity > ascendPeak_) ascendPeak_ = velocity;
         addCurveSample(velocity);
     }
 
-    if (event == Event::RepCompleted && inSet_) {
-        completeRep(nowMs, lastRep);
-        if (current_.reps.size() >= config_.maxReps) return finishSet(nowMs);
+    if (event == Event::RepCompleted && repInProgress_) {
+        repInProgress_ = false;
+        RepRecord rep = buildRep(nowMs, lastRep);
+        lastRep_ = rep;
+        lastRep_.curve.clear();  // シリアル出力用なのでカーブは持たない
+        if (inSet_ && rep.descentUptimeMs >= current_.startedUptimeMs) {
+            addToSet(std::move(rep));
+            if (current_.reps.size() >= config_.maxReps) {
+                if (manualSet_) autoStopped_ = true;  // サーバにも「終わった」と伝える
+                finished = finishSet(nowMs, current_.endedUptimeMs);
+            }
+        } else if (!inSet_) {
+            keepInPreBuffer(std::move(rep), nowMs);
+        }
     }
 
-    if (inSet_ && nowMs - lastPhaseChangeMs_ >= config_.setEndIdleMs) {
-        // 途中のレップ（下降したまま止まっているなど）は記録しない
-        return finishSet(nowMs);
+    if (inSet_) {
+        const uint32_t idleLimit = manualSet_ ? config_.manualIdleMs : config_.setEndIdleMs;
+        if (nowMs - lastPhaseChangeMs_ >= idleLimit) {
+            // 途中のレップ（下降したまま止まっているなど）は記録しない
+            repInProgress_ = false;
+            if (manualSet_) autoStopped_ = true;
+            finished = finishSet(nowMs, current_.endedUptimeMs) || finished;
+        }
     }
-    return false;
+    return finished;
 }
 
 }  // namespace presscall
