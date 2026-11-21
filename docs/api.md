@@ -363,7 +363,7 @@ X-Format-Version: 1
 // 200 OK
 {
   "items": [
-    { "id": "a1...", "date": "2026-11-15", "setCount": 6, "repCount": 28, "bestMeanVelocityMps": 0.61 }
+    { "id": "a1...", "date": "2026-11-15", "setCount": 6, "repCount": 28 }
   ],
   "nextCursor": "eyJkIjoiMjAyNi0xMS0xMCJ9"
 }

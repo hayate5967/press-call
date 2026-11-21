@@ -283,3 +283,62 @@ export const deviceSettingsDetailSchema = deviceSettingsSchema.extend({
   updatedAt: z.iso.datetime(),
 });
 export type DeviceSettingsDetail = z.infer<typeof deviceSettingsDetailSchema>;
+
+// ---------- 練習日（API 仕様書 6 章） ----------
+
+/** GET /sessions の limit（既定 20、最大 50） */
+export const SESSION_LIST_DEFAULT_LIMIT = 20;
+export const SESSION_LIST_MAX_LIMIT = 50;
+
+/** 練習日の日付（日本時間、例 "2026-11-15"） */
+const sessionDate = z.iso.date();
+
+/** GET /sessions の 1 件 */
+export const sessionSummarySchema = z.object({
+  id: z.uuid(),
+  date: sessionDate,
+  /** 削除していないセットの数（1 以上。0 件の練習日は一覧に出さない） */
+  setCount: z.number().int().positive(),
+  repCount: z.number().int().nonnegative(),
+});
+export type SessionSummary = z.infer<typeof sessionSummarySchema>;
+
+export const sessionListSchema = z.object({
+  items: z.array(sessionSummarySchema),
+  /** 続きを取るときに cursor に渡す。最後のページなら null */
+  nextCursor: z.string().nullable(),
+});
+export type SessionList = z.infer<typeof sessionListSchema>;
+
+/** GET /sessions/{id} のレップ（速度カーブは重いので含めない） */
+export const repSummarySchema = z.object({
+  index: z.number().int().positive(),
+  meanVelocityMps: z.number().nullable(),
+  peakVelocityMps: z.number().nullable(),
+  /** 合図より前に挙げた（自動合図モードだけ true になりうる） */
+  isPremature: z.boolean(),
+  pauseActualMs: z.number().int().nullable(),
+  reactionMs: z.number().int().nullable(),
+});
+export type RepSummary = z.infer<typeof repSummarySchema>;
+
+/** GET /sessions/{id} のセット */
+export const sessionSetSchema = z.object({
+  id: z.uuid(),
+  startedAt: z.iso.datetime(),
+  mode: modeSchema,
+  weightKg: z.number().nullable(),
+  rpe: z.number().nullable(),
+  note: z.string().nullable(),
+  repCount: z.number().int().nonnegative(),
+  reps: z.array(repSummarySchema),
+});
+export type SessionSet = z.infer<typeof sessionSetSchema>;
+
+/** GET /sessions/{id} のレスポンス。セットは古い順（その日に挙げた順） */
+export const sessionDetailSchema = z.object({
+  id: z.uuid(),
+  date: sessionDate,
+  sets: z.array(sessionSetSchema),
+});
+export type SessionDetail = z.infer<typeof sessionDetailSchema>;

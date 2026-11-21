@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** 戻り先のタブと、戻るリンクに出す名前 */
-const BACK_LABELS = { "/": "今日", "/settings": "設定" } as const;
+const BACK_LABELS = { "/": "今日", "/history": "履歴", "/settings": "設定" } as const;
 
 export function Page(props: {
   title: string;

@@ -22,6 +22,7 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { PairPage } from "./pages/PairPage";
+import { SessionPage } from "./pages/SessionPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettingsTabPage } from "./pages/SettingsTabPage";
 import { TodayPage } from "./pages/TodayPage";
@@ -93,6 +94,15 @@ const historyRoute = createRoute({
   component: HistoryPage,
 });
 
+const sessionRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: "/history/$sessionId",
+  beforeLoad: ({ params }) => {
+    if (!isUuid(params.sessionId)) throw notFound();
+  },
+  component: SessionPage,
+});
+
 const settingsTabRoute = createRoute({
   getParentRoute: () => authRoute,
   path: "/settings",
@@ -120,6 +130,7 @@ const routeTree = rootRoute.addChildren([
   authRoute.addChildren([
     todayRoute,
     historyRoute,
+    sessionRoute,
     settingsTabRoute,
     pairRoute,
     deviceSettingsRoute,
