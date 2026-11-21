@@ -4,7 +4,8 @@
 //   1. 起動時にブザーと LED を 2 回鳴らす
 //   2. 2 秒間静止させてキャリブレーション（真上の向き・重力・ジャイロのずれを測る）。終わると長めに 1 回鳴る
 //   3. 上下方向の速度を推定し、PauseDetector で「下降 → 静止 → 合図 → 挙上」を判定する
-//   4. 静止が待ち時間続いたらブザーで Press 合図。レップが終わるたびに結果をシリアルに出す
+//   4. 静止が待ち時間続いたらブザーで Press 合図（サーバにつながっているあいだは、セットの記録中だけ鳴らす）。
+//      レップが終わるたびに結果をシリアルに出す
 //   5. セットの開始・終了は Web アプリのボタンで決める（ADR-0011）。NetTask が 5 秒おきに指示を取り、
 //      押した時刻でセットを区切る（届く前のレップもさかのぼって入れる）。記録中は LED をゆっくり点滅させる。
 //      記録中に 3 分動きがなければ自分で終え、サーバに伝える。
@@ -291,10 +292,14 @@ void onSample(uint64_t nowUptime, const ImuSample& s) {
     const float v = estimator.velocity();
     const Event event = detector.update(now, v);
 
-    // 合図は記録より先に出す（NFR-01）
+    // 合図は記録より先に出す（NFR-01）。
+    // サーバにつながっているあいだは、セットの記録中だけ鳴らす（ラックの準備でバーを動かしただけで鳴らさない）。
+    // つながっていないあいだは、動きで区切るので、これまでどおりいつでも鳴らす。
+    // 判定そのものは常に続ける（開始の指示が届く前のレップを、さかのぼって記録に入れるため）
     if (event == Event::PressSignal) {
-        beepFor(kSignalBeepMs);
-        Serial.println("# PRESS");
+        const bool audible = recorder.inSet() || !presscall::net::manualAvailable();
+        if (audible) beepFor(kSignalBeepMs);
+        Serial.println(audible ? "# PRESS" : "# PRESS (muted: not recording)");
     }
 
     const bool setFinished =
