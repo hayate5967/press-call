@@ -191,7 +191,7 @@ function RegisterSteps() {
       <Steps>
         <li>
           デバイスの基板の「BOOT」ボタンを <strong>3 秒</strong>
-          押し続ける。「ピピピ」と 3 回鳴り、基板の LED が速く点滅したら、設定モードです
+          押し続ける。「ピピピ」と 3 回鳴ったら、設定モードです
         </li>
         <li>
           iPhone の「設定」→「Wi-Fi」で、<code className="font-mono">press-call-</code>

@@ -16,7 +16,7 @@ bool apPasswordUsable();
 /**
  * 設定モードを始める。始められれば、再起動するまで戻らない。
  * 始められないとき（AP のパスワードがない・AP を作れない）は理由をログに出して false を返す。
- * setLed は基板の LED を点ける・消す（設定モード中は速く点滅させる）
+ * setLed は LED を点ける・消す（設定モード中は速く点滅させる。LED は GPIO2 に付けたときだけ光る）
  */
 bool run(void (*setLed)(bool on));
 

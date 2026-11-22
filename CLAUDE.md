@@ -7,7 +7,7 @@
 - `firmware/` — ESP32-WROOM-32E + MPU-6050（PlatformIO / Arduino）
   - `lib/detection/` 判定ロジック（PauseDetector, VelocityEstimator）。Arduino 非依存の純 C++。PC 上でテストする
   - `src/main.cpp` センサー読み取り・ブザー・シリアル出力
-  - ピン: SDA=21, SCL=22, ブザー=GPIO18（LOW で鳴る）, LED=GPIO2
+  - ピン: SDA=21, SCL=22, ブザー=GPIO18（LOW で鳴る）, LED=GPIO2（任意。今の基板には付けていない。付ければ光る）
 - `apps/api/` — Hono + @hono/zod-openapi（Zod 4）on Cloudflare Workers
   - DB: Neon (PostgreSQL) を Hyperdrive 経由で使う。ORM は Drizzle、マイグレーションは drizzle-kit
   - エラー応答は RFC 9457（application/problem+json）
