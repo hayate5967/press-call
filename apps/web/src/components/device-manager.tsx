@@ -125,7 +125,7 @@ export function DeviceInfoCard(props: { device: Device }) {
               {device.active ? (
                 <Badge className="bg-success/15 text-success">使える</Badge>
               ) : (
-                <Badge variant="outline">使えない（失効済み）</Badge>
+                <Badge variant="outline">失効済み</Badge>
               )}
             </InfoRow>
             <InfoRow label="最終通信">

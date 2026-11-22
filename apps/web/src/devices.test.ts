@@ -1,6 +1,6 @@
 import type { Device } from "@press-call/shared";
 import { describe, expect, it } from "vitest";
-import { connectedDeviceLabels } from "./devices";
+import { connectedDeviceLabels, splitDevices } from "./devices";
 
 function device(overrides: Partial<Device>): Device {
   return {
@@ -35,5 +35,21 @@ describe("connectedDeviceLabels", () => {
 
   it("デバイスがなければ空", () => {
     expect(connectedDeviceLabels([])).toEqual([]);
+  });
+});
+
+describe("splitDevices", () => {
+  it("使えるデバイスと失効済みのデバイスに分け、並びは変えない", () => {
+    const a = device({ id: "00000000-0000-4000-8000-00000000000a", name: "A", active: true });
+    const b = device({ id: "00000000-0000-4000-8000-00000000000b", name: "B", active: false });
+    const c = device({ id: "00000000-0000-4000-8000-00000000000c", name: "C", active: true });
+    const d = device({ id: "00000000-0000-4000-8000-00000000000d", name: "D", active: false });
+    const { usable, revoked } = splitDevices([a, b, c, d]);
+    expect(usable.map((x) => x.name)).toEqual(["A", "C"]);
+    expect(revoked.map((x) => x.name)).toEqual(["B", "D"]);
+  });
+
+  it("空なら両方空", () => {
+    expect(splitDevices([])).toEqual({ usable: [], revoked: [] });
   });
 });
