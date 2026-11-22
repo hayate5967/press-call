@@ -11,7 +11,10 @@
 //      記録中に 3 分動きがなければ自分で終え、サーバに伝える。
 //      サーバにつながらないあいだは、これまでどおり「15 秒動きがなければ終了」で区切る。
 //      終わったセットは StorageTask に渡してすぐ LittleFS に保存し、NetTask が API に送る
-//   6. モード・待ち時間（固定 / ランダム）・静止のしきい値は API から取る（NetTask が 5 秒おきに問い合わせる）。
+//   6. 設定モード（FR-C01〜C04）：BOOT ボタンを 3 秒長押しすると再起動して入る（セットの記録中は入らない）。
+//      ESP32 が WPA2 の AP と設定ページを出し、テザリングの SSID・パスワードを登録できる（config_mode.cpp）。
+//      テザリングの SSID が一度も登録されていない初回起動でも、設定モードから始まる
+//   7. モード・待ち時間（固定 / ランダム）・静止のしきい値は API から取る（NetTask が 5 秒おきに問い合わせる）。
 //      新しい設定はセットの合間にだけ反映する。取れないときは前回保存した設定、それもなければ既定値で動く
 //
 // コアの分担（アーキテクチャ設計 2 章、NFR-01・02）：
@@ -25,6 +28,8 @@
 
 #include <memory>
 
+#include "config_mode.h"
+#include "long_press.h"
 #include "net_task.h"
 #include "pause_detector.h"
 #include "secrets_include.h"
@@ -33,6 +38,7 @@
 #include "settings_codec.h"
 #include "storage_task.h"
 #include "velocity_estimator.h"
+#include "wifi_creds.h"
 
 using presscall::DetectorConfig;
 using presscall::DeviceSettings;
@@ -59,6 +65,10 @@ constexpr uint32_t kSamplePeriodMs = 10;  // 100Hz
 constexpr uint32_t kMeasureStackBytes = 8 * 1024;
 constexpr UBaseType_t kMeasurePriority = 5;  // NetTask（1）より高く、計測を優先する
 constexpr BaseType_t kMeasureCore = 1;
+
+// ---- 設定モードに入るボタン（基板の BOOT ボタン。押すと LOW） ----
+constexpr uint8_t kButtonPin = 0;
+constexpr uint32_t kConfigHoldMs = 3000;
 
 // ---- 合図 ----
 constexpr uint32_t kSignalBeepMs = 150;
@@ -341,9 +351,34 @@ void onSample(uint64_t nowUptime, const ImuSample& s) {
     }
 }
 
+// ===== 設定モードへの入り口（BOOT ボタンの長押し） =====
+
+presscall::LongPress configLongPress{kConfigHoldMs};
+
+void pollConfigButton(uint32_t now) {
+    if (!configLongPress.update(now, digitalRead(kButtonPin) == LOW)) return;
+    if (recorder.inSet()) {
+        // 記録中に誤って押しても、セットを失わない
+        Serial.println("# CONFIG long press ignored: a set is being recorded");
+        return;
+    }
+    Serial.println("# CONFIG entering config mode (restarting)");
+    presscall::wifi::requestConfigMode();
+    // 3 回鳴らして知らせる。保存の途中で再起動しないよう、少し待ってから再起動する
+    for (int i = 0; i < 3; ++i) {
+        buzzer(true);
+        delay(80);
+        buzzer(false);
+        delay(80);
+    }
+    delay(500);
+    ESP.restart();
+}
+
 void measureOnce() {
     const uint64_t nowUptime = static_cast<uint64_t>(esp_timer_get_time() / 1000);
     updateBuzzer(static_cast<uint32_t>(nowUptime));
+    pollConfigButton(static_cast<uint32_t>(nowUptime));
 
     ImuSample s{};
     if (!mpuRead(s)) {
@@ -407,8 +442,21 @@ void setup() {
     buzzer(false);  // 先に「止める」値を出してから出力にする（起動直後に鳴るのを防ぐ）
     pinMode(kBuzzerPin, OUTPUT);
     pinMode(kLedPin, OUTPUT);
+    pinMode(kButtonPin, INPUT_PULLUP);
     buzzer(false);
     Serial.begin(115200);
+
+    // 設定モード：ボタンの長押しで再起動してきたとき、または初回起動（テザリングの SSID がまだない）。
+    // 始められれば、設定を保存して再起動するまで戻らない。始められないとき（AP のパスワードを
+    // secrets.h に書いていない）は理由をログに出して、そのまま通常の動きで続ける
+    {
+        const bool requested = presscall::wifi::takeConfigModeRequest();
+        if (requested || presscall::wifi::needsFirstSetup()) {
+            Serial.println(requested ? "# CONFIG mode requested" : "# CONFIG first setup (no tethering SSID yet)");
+            for (int i = 0; i < 3; ++i) blockingBeep(80), delay(80);
+            presscall::configmode::run([](bool on) { digitalWrite(kLedPin, on ? HIGH : LOW); });
+        }
+    }
     Wire.begin();
     Wire.setClock(400000);
     mpuSetup();

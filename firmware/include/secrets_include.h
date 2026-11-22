@@ -11,6 +11,11 @@
 #define PRESSCALL_SECRETS_ARE_PLACEHOLDERS 1
 #endif
 
+// 設定モードの AP のパスワード。書いていなければ設定モードは使えない（config_mode.cpp が確かめる）
+#ifndef CONFIG_AP_PASSWORD
+#define CONFIG_AP_PASSWORD ""
+#endif
+
 #if !defined(TETHERING_SSID) || !defined(TETHERING_PASSWORD) || !defined(API_BASE_URL)
 #error "secrets.h に TETHERING_SSID・TETHERING_PASSWORD・API_BASE_URL を書いてください（secrets.example.h を参照）"
 #endif
