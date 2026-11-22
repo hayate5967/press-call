@@ -1,0 +1,371 @@
+<!doctype html>
+<!--
+  開発用：スマホの枠の中にアプリの画面を並べて見るページ（http://localhost:5173/preview.html）
+  - 手元の開発サーバ（pnpm dev）でだけ開ける。ビルド（本番）には入らない（vite build は index.html だけを使う）
+  - 枠の中はふつうのアプリ（同じオリジンの iframe）なので、ログインもそのまま使える
+  - 枠ごとに表示する画面のパスを変えられる。選んだ機種・表示・パスはこのブラウザに覚えておく
+-->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>press-call プレビュー</title>
+    <style>
+      :root {
+        --bg: #e9eef3;
+        --panel: #ffffff;
+        --text: #0f1926;
+        --muted: #4c5d6e;
+        --line: #d3dde6;
+        --accent: #0065dc;
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", system-ui, sans-serif;
+        font-size: 14px;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 20px;
+        padding: 12px 20px;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        margin: 0 8px 0 0;
+        font-size: 16px;
+      }
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+      }
+      select,
+      input[type="text"],
+      button {
+        font: inherit;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 10px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      main {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        justify-content: center;
+        padding: 28px 20px 48px;
+      }
+      .device {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .device-bar {
+        display: flex;
+        gap: 6px;
+        width: 100%;
+      }
+      .device-bar input {
+        flex: 1;
+        min-width: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      /* 本体（ベゼル）。zoom で丸ごと縮めても、中の画面の幅（CSS ピクセル）は変わらない */
+      .phone {
+        padding: 12px;
+        border-radius: 56px;
+        background: #1c1c1e;
+        box-shadow:
+          0 0 0 2px #3a3a3c,
+          0 24px 48px -16px rgba(15, 25, 38, 0.45);
+      }
+      .screen {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: 44px;
+        background: #000;
+      }
+      /* 時刻や電池の帯と、下のホームバー（本物の iPhone で画面にかぶる部分の代わり） */
+      .status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 54px;
+        padding: 14px 32px 0;
+        font-weight: 600;
+        font-size: 15px;
+        background: var(--status-bg, #e6f7ff);
+        color: var(--status-fg, #0f1926);
+      }
+      .island {
+        position: absolute;
+        top: 11px;
+        left: 50%;
+        width: 120px;
+        height: 34px;
+        transform: translateX(-50%);
+        border-radius: 20px;
+        background: #000;
+      }
+      .home {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        background: var(--status-bg, #e6f7ff);
+      }
+      .home::after {
+        content: "";
+        width: 134px;
+        height: 5px;
+        border-radius: 3px;
+        background: var(--status-fg, #0f1926);
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        flex: 1;
+        border: 0;
+        background: var(--status-bg, #e6f7ff);
+      }
+      .size {
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>press-call プレビュー</h1>
+      <label>
+        機種
+        <select id="model"></select>
+      </label>
+      <label>
+        表示
+        <select id="theme">
+          <option value="light">ライト</option>
+          <option value="dark">ダーク</option>
+        </select>
+      </label>
+      <label>
+        拡大率
+        <select id="zoom">
+          <option value="1">100%</option>
+          <option value="0.85">85%</option>
+          <option value="0.75">75%</option>
+          <option value="0.6">60%</option>
+        </select>
+      </label>
+      <button id="reload-all" class="primary" type="button">すべて再読み込み</button>
+      <span class="note">
+        開発用（本番には出ません）。ダークは枠の中にだけ効きます（効かないブラウザでは OS
+        の設定で切り替えてください）
+      </span>
+    </header>
+    <main id="devices"></main>
+
+    <script type="module">
+      // 機種ごとの画面の大きさ（CSS ピクセル）。上下の帯（54px と 34px）は、この中に含む
+      const MODELS = [
+        { id: "se", name: "iPhone SE", width: 375, height: 667 },
+        { id: "16", name: "iPhone 16", width: 393, height: 852 },
+        { id: "16pm", name: "iPhone 16 Pro Max", width: 440, height: 956 },
+      ];
+      const DEFAULT_PATHS = ["/", "/history", "/settings"];
+      const STORE_KEY = "press-call-preview";
+
+      // 選んだ機種などは、このブラウザに覚えておくだけ（読めなくても既定値で動く）
+      function load() {
+        try {
+          return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}");
+        } catch {
+          return {};
+        }
+      }
+      function save(state) {
+        try {
+          localStorage.setItem(STORE_KEY, JSON.stringify(state));
+        } catch {
+          // プライベートブラウズなどで保存できなくても、そのまま使える
+        }
+      }
+
+      const saved = load();
+      const state = {
+        model: MODELS.some((m) => m.id === saved.model) ? saved.model : "16",
+        theme: saved.theme === "dark" ? "dark" : "light",
+        zoom: ["1", "0.85", "0.75", "0.6"].includes(saved.zoom) ? saved.zoom : "0.85",
+        paths:
+          Array.isArray(saved.paths) && saved.paths.length === DEFAULT_PATHS.length
+            ? saved.paths.map((p) => (typeof p === "string" && p.startsWith("/") ? p : "/"))
+            : [...DEFAULT_PATHS],
+      };
+
+      const $model = document.getElementById("model");
+      const $theme = document.getElementById("theme");
+      const $zoom = document.getElementById("zoom");
+      const $devices = document.getElementById("devices");
+
+      for (const m of MODELS) {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = `${m.name}（${m.width}×${m.height}）`;
+        $model.append(opt);
+      }
+      $model.value = state.model;
+      $theme.value = state.theme;
+      $zoom.value = state.zoom;
+
+      const frames = [];
+
+      function time() {
+        const d = new Date();
+        return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+      }
+
+      // 枠を作る。iframe は 1 つずつ時間をずらして読み込む（同時にログインの更新が走りすぎないように）
+      function build() {
+        $devices.textContent = "";
+        frames.length = 0;
+        state.paths.forEach((path, i) => {
+          const wrap = document.createElement("section");
+          wrap.className = "device";
+
+          const bar = document.createElement("div");
+          bar.className = "device-bar";
+          const input = document.createElement("input");
+          input.type = "text";
+          input.value = path;
+          input.setAttribute("aria-label", `${i + 1} 台目に表示するパス`);
+          const go = document.createElement("button");
+          go.type = "button";
+          go.textContent = "開く";
+          bar.append(input, go);
+
+          const phone = document.createElement("div");
+          phone.className = "phone";
+          const screen = document.createElement("div");
+          screen.className = "screen";
+          const status = document.createElement("div");
+          status.className = "status";
+          // 電波と電池の小さな絵（どのブラウザでも出るよう SVG で描く）
+          status.innerHTML =
+            '<span class="clock"></span>' +
+            '<svg width="46" height="12" viewBox="0 0 46 12" aria-hidden="true" fill="currentColor">' +
+            '<rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="6" width="3" height="6" rx="1"/>' +
+            '<rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/>' +
+            '<rect x="22" y="0.5" width="21" height="11" rx="3" fill="none" stroke="currentColor"/>' +
+            '<rect x="24" y="2.5" width="15" height="7" rx="1.5"/><rect x="44" y="4" width="2" height="4" rx="1"/>' +
+            "</svg>";
+          status.querySelector(".clock").textContent = time();
+          const island = document.createElement("div");
+          island.className = "island";
+          const iframe = document.createElement("iframe");
+          iframe.title = `${i + 1} 台目（${path}）`;
+          const home = document.createElement("div");
+          home.className = "home";
+          screen.append(status, island, iframe, home);
+          phone.append(screen);
+
+          const size = document.createElement("div");
+          size.className = "size";
+
+          wrap.append(bar, phone, size);
+          $devices.append(wrap);
+
+          const open = () => {
+            const p = input.value.trim();
+            if (!p.startsWith("/")) {
+              input.value = "/";
+            }
+            state.paths[i] = input.value.trim();
+            save(state);
+            iframe.title = `${i + 1} 台目（${state.paths[i]}）`;
+            iframe.src = state.paths[i];
+          };
+          go.addEventListener("click", open);
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") open();
+          });
+
+          frames.push({ iframe, screen, phone, size });
+          setTimeout(() => {
+            iframe.src = state.paths[i];
+          }, i * 600);
+        });
+        applyLayout();
+      }
+
+      // 機種・表示・拡大率を枠に当てる（iframe は読み込み直さない）
+      function applyLayout() {
+        const m = MODELS.find((x) => x.id === state.model) ?? MODELS[1];
+        const dark = state.theme === "dark";
+        for (const f of frames) {
+          f.screen.style.width = `${m.width}px`;
+          f.screen.style.height = `${m.height}px`;
+          f.phone.style.zoom = state.zoom;
+          // 枠の中の文書の prefers-color-scheme は、iframe 要素の color-scheme に従う（対応ブラウザのみ）
+          f.iframe.style.colorScheme = dark ? "dark" : "light";
+          f.screen.style.setProperty("--status-bg", dark ? "#050b16" : "#e6f7ff");
+          f.screen.style.setProperty("--status-fg", dark ? "#f0f6fa" : "#0f1926");
+          f.size.textContent = `${m.name}・表示する領域 ${m.width}×${m.height - 54 - 34}`;
+        }
+      }
+
+      $model.addEventListener("change", () => {
+        state.model = $model.value;
+        save(state);
+        applyLayout();
+      });
+      $theme.addEventListener("change", () => {
+        state.theme = $theme.value;
+        save(state);
+        applyLayout();
+      });
+      $zoom.addEventListener("change", () => {
+        state.zoom = $zoom.value;
+        save(state);
+        applyLayout();
+      });
+      document.getElementById("reload-all").addEventListener("click", build);
+
+      // 時刻の表示を 1 分ごとに進める
+      setInterval(() => {
+        for (const el of document.querySelectorAll(".clock")) el.textContent = time();
+      }, 30_000);
+
+      build();
+    </script>
+  </body>
+</html>
