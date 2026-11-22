@@ -107,6 +107,8 @@ export function SettingsTabPage() {
               </AlertDescription>
             </Alert>
           )}
+          <RegisterSteps />
+          <h3 className="pt-2 font-semibold">デバイスを追加する</h3>
           <Steps>
             <li>上のセットアップで、デバイスをテザリングにつなぐ</li>
             <li>
@@ -175,5 +177,55 @@ function DeviceRows(props: { devices: Device[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * テザリングの名前とパスワードを、デバイスに登録する手順（デバイスの「設定モード」）。
+ * 初めて使うときに行う。テザリングの名前・パスワードを変えたときも同じ手順で登録し直す
+ */
+function RegisterSteps() {
+  return (
+    <>
+      <h3 className="font-semibold">テザリングを登録する</h3>
+      <Steps>
+        <li>
+          デバイスの基板の「BOOT」ボタンを <strong>3 秒</strong>
+          押し続ける。「ピピピ」と 3 回鳴り、基板の LED が速く点滅したら、設定モードです
+        </li>
+        <li>
+          iPhone の「設定」→「Wi-Fi」で、<code className="font-mono">press-call-</code>
+          で始まる名前を選び、デバイスに決めた設定モード用のパスワードでつなぐ。「インターネットに接続していません」と出ますが、そのままで大丈夫です
+        </li>
+        <li>
+          {/* 設定ページはデバイスが出すページ。この案内を残したまま別のタブで開く */}
+          <a
+            href="http://192.168.4.1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-primary underline underline-offset-4"
+          >
+            http://192.168.4.1
+          </a>{" "}
+          を開く（手順 2 の Wi-Fi につないだまま開きます）
+        </li>
+        <li>
+          開いたページに iPhone
+          のテザリングの名前とパスワードを入れて、「保存して再起動」を押す。「保存しました」と出れば完了です。数秒でデバイスが再起動して、テザリングにつながります
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+            <li>
+              <strong className="text-foreground">名前</strong>
+              ：「設定」→「一般」→「情報」→「名前」に出ているもの（例：
+              <code className="font-mono">山田のiPhone</code>
+              ）。テザリングの名前は、この iPhone の名前と同じです
+            </li>
+            <li>
+              <strong className="text-foreground">パスワード</strong>
+              ：「設定」→「インターネット共有」→「“Wi-Fi”のパスワード」に出ているもの
+            </li>
+          </ul>
+        </li>
+      </Steps>
+    </>
   );
 }
