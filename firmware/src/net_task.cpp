@@ -13,6 +13,7 @@
 #include "pairing_codec.h"
 #include "recording_codec.h"
 #include "secrets_include.h"
+#include "wifi_creds.h"
 #include "send_policy.h"
 #include "set_codec.h"
 #include "set_store.h"
@@ -470,7 +471,17 @@ void netTask(void*) {
 
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
-    WiFi.begin(TETHERING_SSID, TETHERING_PASSWORD);
+    // 設定モードで登録した SSID・パスワード。なければ secrets.h の値（予備）
+    WifiCredentials wifiCreds;
+    const bool fromSaved = wifi::loadSaved(wifiCreds);
+    if (fromSaved || wifi::loadEffective(wifiCreds)) {
+        // どちらを使ったかだけを出す（SSID・パスワードは出さない）
+        Serial.printf("# NET tethering credentials: %s\n",
+                      fromSaved ? "saved by config mode" : "from secrets.h (fallback)");
+        WiFi.begin(wifiCreds.ssid.c_str(), wifiCreds.password.c_str());
+    } else {
+        Serial.println("# NET no tethering SSID. Hold the BOOT button for 3 seconds to set it up");
+    }
     configTime(0, 0, "ntp.nict.jp", "time.google.com", "pool.ntp.org");  // UTC で合わせる
 
     bool wasConnected = false;
